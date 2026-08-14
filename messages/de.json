@@ -1,0 +1,203 @@
+{
+  "navigation": {
+    "console": "Konsole",
+    "history": "Verläufe",
+    "hooks": "Hooks & Einstellungen",
+    "toggleLanguage": "Sprache wechseln",
+    "subtitle": "Lokale Agenten-Konsole"
+  },
+  "project": {
+    "title": "Projekt",
+    "directory": "Projektverzeichnis",
+    "none": "— keines —",
+    "loadState": "Arbeitsstand als Kontext"
+  },
+  "roles": {
+    "title": "Rollen",
+    "noRolesFound": "Keine Rollen in ~/.claude/agents gefunden.",
+    "none": "— keine —"
+  },
+  "model": {
+    "title": "Modell",
+    "auto": "Automatisch (wie in Rolle/System)",
+    "forAll": "für alle:",
+    "allTo": "alle auf"
+  },
+  "session": {
+    "start": "Session starten",
+    "cancel": "Abbrechen",
+    "clear": "Leeren",
+    "interrupted": "Session unterbrochen — der Serverprozess ist gegangen. Die Unterhaltung liegt noch bei Claude.",
+    "resume": "fortsetzen"
+  },
+  "stats": {
+    "tokens": "Tokens",
+    "out": "aus",
+    "in": "ein",
+    "cache": "Cache",
+    "requests": "Anfragen",
+    "duration": "Dauer",
+    "tooltip": "Ausgabe und frische Eingabe sind neu verarbeitet. Cache-Schreiben kostet extra, Cache-Lesen ist billig und wird bei jeder Anfrage erneut gemeldet."
+  },
+  "feed": {
+    "title": "Live-Feed",
+    "waiting": "wartet",
+    "filterAll": "alles",
+    "filterTools": "werkzeuge",
+    "filterRoles": "rollen",
+    "noItems": "— nichts in dieser Auswahl —",
+    "of": "von"
+  },
+  "messages": {
+    "placeholderWartet": "Antworten und weitermachen …",
+    "placeholderRunning": "Nachricht an die Session …",
+    "send": "Senden",
+    "attach": "mitschicken:",
+    "all": "alle",
+    "attachRoleTitle": "Nachricht weist den Orchestrator an, „{role}“ zu beauftragen"
+  },
+  "roleRun": {
+    "noRoleAlert": "Diese Runde lief ohne Rolle — kein Review erfolgt. Der Rollenlauf holt es nach, ohne den Orchestrator zu fragen.",
+    "startRun": "Rollenlauf starten",
+    "taskReset": "Auftrag zurücksetzen",
+    "attachState": "Stand mitgeben",
+    "attachStateTitle": "Der Arbeitsstand wird einmal ermittelt und allen Rollen mitgegeben, statt dass ihn jede selbst zusammensucht",
+    "emptyTaskNote": "Leerer Auftrag = Prüfung des uncommitteten Stands. Jeder andere Text geht jeder Rolle wörtlich zu.",
+    "title": "Rollenlauf",
+    "running": "läuft · {roles}",
+    "subtitle": "jede Rolle als eigene Session — unabhängig vom Orchestrator",
+    "configure": "einstellen",
+    "collapse": "zu",
+    "start": "starten",
+    "runningShort": "läuft …",
+    "startTitle": "{roles} auf {project} laufen lassen",
+    "noRoleSelected": "Keine Rolle gewählt",
+    "noRoleError": "Für den Rollenlauf ist keine Rolle gewählt.",
+    "timeout": "Zeitgrenze {seconds} s je Rolle",
+    "noTimeout": "ohne Zeitgrenze",
+    "taskPlaceholder": "Auftrag an jede Rolle …",
+    "perRole": "je Rolle",
+    "allOn": "alle auf {model}",
+    "modelSelectTitle": "„je Rolle“ lässt --model weg — dann gilt das model: aus der Rollendatei",
+    "configTitle": "Auftrag und Modell einstellen"
+  },
+  "waitState": {
+    "waitingFor": "Antwort liegt vor — die Session wartet seit {time} auf deine Rückmeldung."
+  },
+  "runs": {
+    "title": "Verläufe",
+    "reading": "lese Transcripts…",
+    "count": "Läufen aus ~/.claude/projects",
+    "search": "Suchen…",
+    "allProjects": "alle Projekte",
+    "withRoles": "nur mit Rollen",
+    "dateHeader": "Datum",
+    "runHeader": "Lauf",
+    "durationHeader": "Dauer",
+    "tokensHeader": "Tokens",
+    "securityHeader": "Security",
+    "statusHeader": "Status",
+    "report": "Bericht",
+    "selectRun": "Lauf auswählen…",
+    "noMatch": "Kein Lauf passt zu dieser Auswahl.",
+    "noTranscripts": "Keine Transcripts gefunden.",
+    "tools": "Werkzeuge",
+    "roles": "Rollen",
+    "summary": "Zusammenfassung",
+    "participants": "Beteiligte Rollen",
+    "artifacts": "Artefakte"
+  },
+  "hooks": {
+    "title": "Hooks & Automation",
+    "subtitle": "Trigger, Nachtläufe und Zustellung",
+    "gateActive": "scharf",
+    "notInstalled": "nicht installiert",
+    "gateDescription": "Stop-Hook: startet nach jeder Session mit uncommitteten Änderungen an sicherheitsrelevanten Dateien.",
+    "lastRuns": "Letzte Auslösungen",
+    "notYetTriggered": "Noch nicht ausgelöst.",
+    "connected": "verbunden",
+    "offline": "offline",
+    "claudeOnServer": "Claude auf dem Server",
+    "otherCronLines": "Fremde Cron-Zeilen",
+    "unchanged": "(bleiben unberührt)",
+    "saveFailed": "Speichern fehlgeschlagen",
+    "cronFailed": "Crontab konnte nicht geschrieben werden",
+    "saved": "settings.json geschrieben (Sicherung daneben abgelegt).",
+    "cronUpdated": "Crontab auf vps02 aktualisiert."
+  },
+  "topbar": {
+    "waitingSince": "wartet auf Eingabe · seit {time}",
+    "sessionStatus": "Session {status}",
+    "noSession": "keine Session",
+    "projects": "{count} Projekte"
+  },
+  "layout": {
+    "showSidebar": "Session-Spalte einblenden",
+    "showFeed": "Live-Feed einblenden",
+    "close": "Schließen",
+    "resizerTitle": "Ziehen zum Ändern, Doppelklick klappt ein"
+  },
+  "sidebar": {
+    "runningSession": "Laufende Session",
+    "newSession": "Neue Session",
+    "projectFixed": "Projekt · fest",
+    "noRemote": " — ohne Remote",
+    "localOnly": " — lokal",
+    "workingCopies": "{count} Arbeitskopien dieses Repos",
+    "modelNote": "· wirkt erst über Übernehmen",
+    "rolesTitle": "Rollen · ~/.claude/agents",
+    "roleLocked": "„{role}“ ist dieser Session mitgegeben und lässt sich nicht mehr entfernen",
+    "roleAdd": "„{role}“ jetzt dazuschalten — die Session bekommt einen Auftrag dafür",
+    "addTag": "+ dazu",
+    "lockNote": "Rollen lassen sich dazuschalten, aber nicht mehr herausnehmen. Modell und Auto-Permissions stehen im Prozessaufruf — sie wechseln über Übernehmen, die Unterhaltung läuft dabei per --resume weiter. Der Projektordner ist fest.",
+    "apply": "Übernehmen · Session fortsetzen",
+    "messagesHint": "Weitere Anweisungen gehen unten rechts an die laufende Session.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Was soll die Session tun?",
+    "cliMismatch": "Das ist der laufende Aufruf. Die Auswahl oben weicht davon ab.",
+    "stop": "Session beenden",
+    "automation": "Automation",
+    "nightRun": "Nachtlauf · vps02",
+    "manage": "verwalten",
+    "hookCard": "Hook · security-reviewer",
+    "hookCardNote": "Startet automatisch nach Sessions mit Code-Änderungen"
+  },
+  "console": {
+    "noSession": "Keine laufende Session",
+    "chooseLeft": "Links Projekt, Modell und Rollen wählen",
+    "rolesCount": "{count} Rollen",
+    "answerReady": "· Antwort fertig, wartet seit {time} auf Eingabe",
+    "viewRoles": "Rollen",
+    "viewAnswer": "Antwort",
+    "emptyHint": "Links Projekt, Modell und Rollen wählen, Auftrag eintippen, starten. Der Verlauf früherer Läufe steht unter",
+    "orderNote": "Reihenfolge der Beauftragung · Rollen arbeiten isoliert, alles läuft über den Orchestrator"
+  },
+  "panel": {
+    "status": "Status",
+    "calls": "Aufrufe",
+    "usage": "Verbrauch",
+    "phase": "Phase",
+    "task": "Auftrag",
+    "reply": "Rückmeldung",
+    "stored": "abgelegt",
+    "ownRun": "eigener Lauf",
+    "agentTool": "Agent-Tool",
+    "requestsShort": "Anfr."
+  },
+  "answer": {
+    "none": "Noch keine Antwort.",
+    "needsYou": "Das braucht die Session von dir",
+    "freeForm": "Rückmeldung frei — keine konkrete Frage erkannt, Kern steht unten.",
+    "answerN": "Antwort {n}",
+    "copy": "kopieren",
+    "expand": "Aufklappen",
+    "collapse": "Zuklappen",
+    "chars": "{n}k Zeichen"
+  },
+  "errors": {
+    "startFailed": "Start fehlgeschlagen",
+    "resumeFailed": "Fortsetzen fehlgeschlagen",
+    "applyFailed": "Umstellen fehlgeschlagen",
+    "roleRunFailed": "Rollenlauf konnte nicht starten"
+  }
+}

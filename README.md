@@ -113,6 +113,10 @@ session does not greet you with a wall of text.
 The layout is responsive: on narrow windows the two side columns turn into
 drawers that slide over the content instead of squeezing it.
 
+The UI is bilingual (German default, English via the EN/DE toggle in the top
+bar — routes live under `/de` and `/en`). Stream content is data, not chrome:
+feed lines, role phases and reports appear as the sessions produced them.
+
 ### Role runs
 
 The **Rollenlauf** (role run) button below the graph starts every selected

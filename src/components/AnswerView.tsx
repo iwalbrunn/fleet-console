@@ -1,6 +1,7 @@
 'use client'
 
 import { useLayoutEffect, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { fmtTime } from '@/lib/types'
 
 /**
@@ -150,7 +151,7 @@ function extrahiereBedarf(text: string): string[] {
     .map((z) => z.replace(/^[\s>#*•\-\d.)]+/, '').replace(/\*\*/g, '').trim())
     .filter(Boolean)
   const aufforderung =
-    /^(soll ich|möchtest du|willst du|brauchst du|bitte (gib|sag|prüf|bestätig|entscheid|schick)|sag (mir |)bescheid|entscheide|gib mir|wie soll|was soll|welche[rs]? (variante|option|weg))/i
+    /^(soll ich|möchtest du|willst du|brauchst du|bitte (gib|sag|prüf|bestätig|entscheid|schick)|sag (mir |)bescheid|entscheide|gib mir|wie soll|was soll|welche[rs]? (variante|option|weg)|should i|do you want|would you like|please (confirm|check|decide|tell|send)|let me know|which (option|variant|way)|how should|what should)/i
   const fragen = zeilen.filter((z) => (z.endsWith('?') && z.length > 12) || aufforderung.test(z))
   return [...new Set(fragen)].slice(-5)
 }
@@ -162,6 +163,7 @@ export default function AnswerView({
   antworten: { t: string; text: string }[]
   wartet?: boolean
 }) {
+  const t = useTranslations()
   const box = useRef<HTMLDivElement>(null)
   const letzte = useRef<HTMLDivElement>(null)
   const anzahl = antworten.length
@@ -184,7 +186,7 @@ export default function AnswerView({
   if (!antworten.length) {
     return (
       <div className="stage" style={{ display: 'grid', placeItems: 'center', color: 'var(--color-neutral-600)', fontSize: 13 }}>
-        Noch keine Antwort.
+        {t('answer.none')}
       </div>
     )
   }
@@ -197,7 +199,7 @@ export default function AnswerView({
       {/* Was jetzt gebraucht wird, steht über dem Text — nicht darin begraben. */}
       {(bedarf.length > 0 || wartet) && (
         <div className="fragebox" style={{ margin: '12px 14px 0', flex: 'none' }}>
-          <div className="kicker">Das braucht die Session von dir</div>
+          <div className="kicker">{t('answer.needsYou')}</div>
           {bedarf.length > 0 ? (
             bedarf.map((f, i) => (
               <div key={i} className="fragezeile">
@@ -205,7 +207,7 @@ export default function AnswerView({
               </div>
             ))
           ) : (
-            <div className="fragezeile">Rückmeldung frei — keine konkrete Frage erkannt, Kern steht unten.</div>
+            <div className="fragezeile">{t('answer.freeForm')}</div>
           )}
         </div>
       )}
@@ -225,7 +227,7 @@ export default function AnswerView({
                 className="antwortzeile"
                 style={{ marginBottom: 8 }}
                 onClick={() => setOffen((o) => ({ ...o, [i]: true }))}
-                title="Aufklappen"
+                title={t('answer.expand')}
               >
                 <i className="ph ph-caret-right" style={{ fontSize: 11, flex: 'none' }} />
                 <span style={{ flex: 'none', color: 'var(--color-neutral-600)' }}>
@@ -235,7 +237,7 @@ export default function AnswerView({
                   {erste.replace(/^#+\s*/, '').replace(/\*\*/g, '')}
                 </span>
                 <span style={{ marginLeft: 'auto', flex: 'none', color: 'var(--color-neutral-600)' }}>
-                  {a.text.length > 1200 ? `${Math.round(a.text.length / 1000)}k Zeichen` : ''}
+                  {a.text.length > 1200 ? t('answer.chars', { n: Math.round(a.text.length / 1000) }) : ''}
                 </span>
               </button>
             )
@@ -250,17 +252,17 @@ export default function AnswerView({
                   className="btn btn-ghost"
                   style={{ fontSize: 10, padding: '1px 6px' }}
                   onClick={() => setOffen((o) => ({ ...o, [i]: false }))}
-                  title="Zuklappen"
+                  title={t('answer.collapse')}
                 >
                   <i className="ph ph-caret-down" />
                 </button>
-                Antwort {i + 1} · {fmtTime(a.t)}
+                {t('answer.answerN', { n: i + 1 })} · {fmtTime(a.t)}
                 <button
                   className="btn btn-ghost"
                   style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
                   onClick={() => navigator.clipboard?.writeText(a.text)}
                 >
-                  <i className="ph ph-copy" /> kopieren
+                  <i className="ph ph-copy" /> {t('answer.copy')}
                 </button>
               </div>
               <div style={{ maxWidth: 780 }}>
