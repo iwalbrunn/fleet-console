@@ -143,14 +143,14 @@ export function fmtDuration(ms: number): string {
   return `${Math.floor(m / 60)} h ${m % 60} min`
 }
 
-export function fmtDate(iso: string): string {
+export function fmtDate(iso: string, locale: string = 'de-DE'): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-export function fmtTime(iso: string): string {
+export function fmtTime(iso: string, locale: string = 'de-DE'): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '--:--:--'
-  return d.toLocaleTimeString('de-DE', { hour12: false })
+  return d.toLocaleTimeString(locale, { hour12: false })
 }

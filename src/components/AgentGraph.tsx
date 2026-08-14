@@ -63,14 +63,16 @@ export default function AgentGraph({
   /** Physik: Ort und Geschwindigkeit je Knoten. Lebt über Renders hinweg. */
   const sim = useRef(new Map<string, Teilchen>())
 
-  for (const n of nodes) {
-    const vorher = prevStatus.current.get(n.id)
-    if (vorher === 'running' && n.status !== 'running' && n.status !== 'idle') {
-      burstUntil.current.set(n.id, Date.now() + 2200)
+  useEffect(() => {
+    nodesRef.current = nodes
+    for (const n of nodes) {
+      const vorher = prevStatus.current?.get(n.id)
+      if (vorher === 'running' && n.status !== 'running' && n.status !== 'idle') {
+        burstUntil.current?.set(n.id, Date.now() + 2200)
+      }
+      prevStatus.current?.set(n.id, n.status)
     }
-    prevStatus.current.set(n.id, n.status)
-  }
-  nodesRef.current = nodes
+  }, [nodes])
 
   useEffect(() => {
     const wrap = wrapRef.current
@@ -163,7 +165,8 @@ export default function AgentGraph({
         t.y = Math.max(48, Math.min(Math.max(49, H - 54), t.y + t.vy))
 
         const el = nodeRefs.current.get(id)
-        if (el?.isConnected) el.style.transform = `translate(${t.x}px,${t.y}px) translate(-50%,-50%)`
+        if (el?.isConnected)
+          el.style.transform = `translate(${t.x}px,${t.y}px) translate(-50%,-50%)`
       }
       return energie
     }
@@ -235,7 +238,11 @@ export default function AgentGraph({
         const punkt = (u: number) => {
           const g = 1 - u
           return {
-            x: g * g * g * A.x + 3 * g * g * u * (A.x + dx) + 3 * g * u * u * (B.x - dx) + u * u * u * B.x,
+            x:
+              g * g * g * A.x +
+              3 * g * g * u * (A.x + dx) +
+              3 * g * u * u * (B.x - dx) +
+              u * u * u * B.x,
             y: g * g * g * A.y + 3 * g * g * u * A.y + 3 * g * u * u * B.y + u * u * u * B.y,
           }
         }
@@ -259,7 +266,10 @@ export default function AgentGraph({
 
         let strom = stroeme.get(schluessel)
         if (!strom) {
-          strom = Array.from({ length: DICHTE }, () => ({ t: Math.random(), v: 0.003 + Math.random() * 0.004 }))
+          strom = Array.from({ length: DICHTE }, () => ({
+            t: Math.random(),
+            v: 0.003 + Math.random() * 0.004,
+          }))
           stroeme.set(schluessel, strom)
         }
 
@@ -273,7 +283,9 @@ export default function AgentGraph({
           ctx.beginPath()
           ctx.arc(pt.x, pt.y, 1.1 + teilchen.v * 260, 0, Math.PI * 2)
           const helligkeit = 0.35 + 0.6 * Math.sin(Math.PI * teilchen.t)
-          ctx.fillStyle = rueck ? `rgba(226,220,255,${helligkeit})` : `rgba(213,206,253,${helligkeit})`
+          ctx.fillStyle = rueck
+            ? `rgba(226,220,255,${helligkeit})`
+            : `rgba(213,206,253,${helligkeit})`
           ctx.fill()
         }
         ctx.restore()
@@ -287,7 +299,11 @@ export default function AgentGraph({
   const orchestrator = nodes.find((n) => n.id === 'orchestrator')
   const agents = nodes.filter((n) => n.id !== 'orchestrator')
 
-  const chip = (status: GraphNode['status'], gewaehlt: boolean, gross: boolean): React.CSSProperties => ({
+  const chip = (
+    status: GraphNode['status'],
+    gewaehlt: boolean,
+    gross: boolean
+  ): React.CSSProperties => ({
     display: 'flex',
     alignItems: 'center',
     gap: gross ? 9 : 8,
@@ -322,16 +338,28 @@ export default function AgentGraph({
 
   return (
     <div ref={wrapRef} className="stage">
-      <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+      <canvas
+        ref={canvasRef}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+      />
 
       {orchestrator && (
         <div
           ref={(el) => {
             if (el) nodeRefs.current.set('orchestrator', el)
           }}
-          style={{ position: 'absolute', left: 0, top: 0, willChange: 'transform', transform: 'translate(-300px,-300px)' }}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            willChange: 'transform',
+            transform: 'translate(-300px,-300px)',
+          }}
         >
-          <button style={chip(orchestrator.status, selected === 'orchestrator', true)} onClick={() => onSelect('orchestrator')}>
+          <button
+            style={chip(orchestrator.status, selected === 'orchestrator', true)}
+            onClick={() => onSelect('orchestrator')}
+          >
             <div
               style={{
                 width: 34,
@@ -344,7 +372,10 @@ export default function AgentGraph({
                 flex: 'none',
               }}
             >
-              <i className="ph ph-tree-structure" style={{ fontSize: 17, color: 'var(--color-accent)' }} />
+              <i
+                className="ph ph-tree-structure"
+                style={{ fontSize: 17, color: 'var(--color-accent)' }}
+              />
             </div>
             <div style={{ minWidth: 0, textAlign: 'left' }}>
               <div style={{ fontSize: 12.5, fontWeight: 500 }}>orchestrator</div>
@@ -371,10 +402,23 @@ export default function AgentGraph({
           ref={(el) => {
             if (el) nodeRefs.current.set(n.id, el)
           }}
-          style={{ position: 'absolute', left: 0, top: 0, willChange: 'transform', transform: 'translate(-300px,-300px)' }}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            willChange: 'transform',
+            transform: 'translate(-300px,-300px)',
+          }}
         >
-          <button style={chip(n.status, selected === n.id, false)} onClick={() => onSelect(n.id)} title={n.ergebnis || n.auftrag}>
-            <i className={`ph ${icon(n.id)}`} style={{ fontSize: 15, color: statusFarbe(n.status), flex: 'none' }} />
+          <button
+            style={chip(n.status, selected === n.id, false)}
+            onClick={() => onSelect(n.id)}
+            title={n.ergebnis || n.auftrag}
+          >
+            <i
+              className={`ph ${icon(n.id)}`}
+              style={{ fontSize: 15, color: statusFarbe(n.status), flex: 'none' }}
+            />
             <span style={{ fontSize: 11.5, fontWeight: 500 }}>{n.id}</span>
             {n.order ? (
               <span style={{ fontSize: 9.5, color: 'var(--color-neutral-500)' }}>
