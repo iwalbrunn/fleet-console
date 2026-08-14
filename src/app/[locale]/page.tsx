@@ -30,6 +30,14 @@ const ROLE_ICONS: Record<string, string> = {
 
 export default function Page() {
   const t = useTranslations()
+  const sessionStatusLabel: Record<SessionState['status'], string> = {
+    startet: t('session.statusStartet'),
+    läuft: t('session.statusLaeuft'),
+    fertig: t('session.statusFertig'),
+    fehler: t('session.statusFehler'),
+    abgebrochen: t('session.statusAbgebrochen'),
+    unterbrochen: t('session.statusUnterbrochen'),
+  }
   const [tab, setTab] = useState<Tab>('konsole')
 
   const [projects, setProjects] = useState<ProjectEntry[]>([])
@@ -553,7 +561,7 @@ export default function Page() {
             {t('navigation.history')}
           </button>
           <button className="navbtn" data-active={tab === 'hooks'} onClick={() => setTab('hooks')}>
-            Hooks
+            {t('navigation.hooks')}
           </button>
         </nav>
         <div className="topbar-pills" style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -582,12 +590,14 @@ export default function Page() {
               >
                 {sessions.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.status} · {s.prompt.slice(0, 28)}
+                    {sessionStatusLabel[s.status]} · {s.prompt.slice(0, 28)}
                   </option>
                 ))}
               </select>
             ) : session ? (
-              wartet ? t('topbar.waitingSince', { time: wartetSeit ?? '' }) : t('topbar.sessionStatus', { status: session.status })
+              wartet
+                ? t('topbar.waitingSince', { time: wartetSeit ?? '' })
+                : t('topbar.sessionStatus', { status: sessionStatusLabel[session.status] })
             ) : (
               t('topbar.noSession')
             )}
@@ -836,7 +846,7 @@ export default function Page() {
             }}
           >
             <div>
-              <div style={{ fontSize: 13 }}>Auto-Permissions</div>
+              <div style={{ fontSize: 13 }}>{t('session.autoPermissions')}</div>
               <div className="mono" style={{ fontSize: 10, color: 'var(--color-neutral-500)' }}>
                 --dangerously-skip-permissions
               </div>
@@ -910,7 +920,7 @@ export default function Page() {
               </span>
             </div>
             <div className="mono" style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>
-              cron · claude -p · Report
+              cron · claude -p · {t('runs.report')}
             </div>
           </button>
           <button className="card" style={{ gap: 4, cursor: 'pointer', textAlign: 'left' }} onClick={() => setTab('hooks')}>

@@ -167,7 +167,7 @@ export default function HooksView() {
               className="ph ph-moon-stars"
               style={{ color: 'var(--color-accent)', fontSize: 17 }}
             />
-            <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>Nachtläufe · vps02</span>
+            <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{t('hooks.nightRunsTitle')}</span>
             <span
               className={`tag ${vps?.connected ? 'tag-accent' : 'tag-outline'}`}
               style={{ fontSize: 10 }}
@@ -192,7 +192,7 @@ export default function HooksView() {
               </div>
               {vps.lastRun && (
                 <div className="split">
-                  <span>Letzter Lauf</span>
+                  <span>{t('hooks.lastRun')}</span>
                   <span style={{ color: '#d2cefd' }}>{vps.lastRun}</span>
                 </div>
               )}
@@ -222,7 +222,7 @@ export default function HooksView() {
                 <span style={{ fontSize: 12, flex: 1 }}>{r.name}</span>
                 <button
                   className="btn btn-ghost btn-icon"
-                  title="Entfernen"
+                  title={t('hooks.remove')}
                   onClick={() => setRuns(runs.filter((_, j) => j !== i))}
                 >
                   <i className="ph ph-trash" />
@@ -256,7 +256,7 @@ export default function HooksView() {
               }
             >
               <i className="ph ph-plus" />
-              Nachtlauf
+              {t('hooks.addNightRun')}
             </button>
             <button
               className="btn btn-primary"
@@ -264,7 +264,7 @@ export default function HooksView() {
               onClick={() => saveRuns(runs)}
             >
               <i className="ph ph-cloud-arrow-up" />
-              Auf vps02 schreiben
+              {t('hooks.writeToVps')}
             </button>
           </div>
         </div>
@@ -276,13 +276,13 @@ export default function HooksView() {
               className="ph ph-brackets-curly"
               style={{ color: 'var(--color-accent)', fontSize: 17 }}
             />
-            <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>hooks in settings.json</span>
+            <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{t('hooks.settingsJson')}</span>
             <button
               className="btn btn-ghost"
               style={{ fontSize: 12 }}
               onClick={() => setEditing(!editing)}
             >
-              {editing ? 'Abbrechen' : 'Bearbeiten'}
+              {editing ? t('hooks.cancel') : t('hooks.edit')}
             </button>
           </div>
           {editing ? (
@@ -296,7 +296,7 @@ export default function HooksView() {
               />
               <button className="btn btn-primary" disabled={saving} onClick={saveHooks}>
                 <i className="ph ph-floppy-disk" />
-                Speichern
+                {t('hooks.save')}
               </button>
             </>
           ) : (
@@ -315,11 +315,12 @@ export default function HooksView() {
                 overflow: 'auto',
               }}
             >
-              {hooks?.raw ?? 'lade …'}
+              {hooks?.raw ?? t('hooks.loading')}
             </pre>
           )}
           <div style={{ fontSize: 10.5, color: 'var(--color-neutral-500)' }}>
-            {hooks?.entries.length ?? 0} Hooks aktiv · {hooks?.file.replace(/^\/Users\/[^/]+/, '~')}
+            {t('hooks.hooksActive', { count: hooks?.entries.length ?? 0 })} ·{' '}
+            {hooks?.file.replace(/^\/Users\/[^/]+/, '~')}
           </div>
         </div>
       </div>

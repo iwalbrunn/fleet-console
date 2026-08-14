@@ -1,3 +1,6 @@
+// @vitest-environment node
+// config.ts imports node:os / node:path — jsdom's module resolution can't
+// serve those, so this file needs the plain Node environment.
 import { test, expect, describe, beforeAll, afterAll } from 'vitest'
 
 const ORIGINAL_ENV = process.env

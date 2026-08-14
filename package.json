@@ -10,9 +10,9 @@
     "url": "git+https://github.com/iwalbrunn/fleet-console.git"
   },
   "scripts": {
-    "dev": "next dev -p 4300",
+    "dev": "next dev -p 4300 --hostname 127.0.0.1",
     "build": "next build",
-    "start": "next start -p 4300",
+    "start": "next start -p 4300 --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "format": "prettier --write .",

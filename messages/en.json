@@ -2,9 +2,13 @@
   "navigation": {
     "console": "Console",
     "history": "History",
-    "hooks": "Hooks & Settings",
+    "hooks": "Hooks",
     "toggleLanguage": "Toggle Language",
     "subtitle": "Local agent console"
+  },
+  "meta": {
+    "title": "Fleet Console",
+    "description": "Local agent console for Claude Code"
   },
   "project": {
     "title": "Project",
@@ -28,7 +32,14 @@
     "cancel": "Cancel",
     "clear": "Clear",
     "interrupted": "Session interrupted — the server process has exited. The conversation is still with Claude.",
-    "resume": "resume"
+    "resume": "resume",
+    "autoPermissions": "Auto-Permissions",
+    "statusStartet": "starting",
+    "statusLaeuft": "running",
+    "statusFertig": "done",
+    "statusFehler": "error",
+    "statusAbgebrochen": "aborted",
+    "statusUnterbrochen": "interrupted"
   },
   "stats": {
     "tokens": "Tokens",
@@ -105,7 +116,13 @@
     "roles": "Roles",
     "summary": "Summary",
     "participants": "Participants",
-    "artifacts": "Artifacts"
+    "artifacts": "Artifacts",
+    "andMore": "… and {count} more",
+    "securityReview": "Security Review",
+    "statusDone": "completed",
+    "statusAborted": "aborted",
+    "securityChecked": "checked",
+    "securityOpen": "open"
   },
   "hooks": {
     "title": "Hooks & Automation",
@@ -123,7 +140,18 @@
     "saveFailed": "Save failed",
     "cronFailed": "Could not write crontab",
     "saved": "settings.json written (backup placed next to it).",
-    "cronUpdated": "Crontab updated on vps02."
+    "cronUpdated": "Crontab updated on vps02.",
+    "nightRunsTitle": "Night runs · vps02",
+    "lastRun": "Last run",
+    "remove": "Remove",
+    "addNightRun": "Night run",
+    "writeToVps": "Write to vps02",
+    "settingsJson": "hooks in settings.json",
+    "edit": "Edit",
+    "cancel": "Cancel",
+    "save": "Save",
+    "loading": "loading …",
+    "hooksActive": "{count, plural, one {# hook active} other {# hooks active}}"
   },
   "topbar": {
     "waitingSince": "waiting for input · since {time}",

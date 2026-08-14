@@ -3,13 +3,18 @@ import '@phosphor-icons/web/regular'
 import '../nocturne.css'
 import '../globals.css'
 import { NextIntlClientProvider } from 'next-intl'
-import { getMessages, setRequestLocale } from 'next-intl/server'
+import { getMessages, getTranslations, setRequestLocale } from 'next-intl/server'
 import { routing } from '@/i18n/routing'
 import { notFound } from 'next/navigation'
 
-export const metadata: Metadata = {
-  title: 'Fleet Console',
-  description: 'Local agent console for Claude Code',
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}): Promise<Metadata> {
+  const { locale } = await params
+  const t = await getTranslations({ locale, namespace: 'meta' })
+  return { title: t('title'), description: t('description') }
 }
 
 export function generateStaticParams() {
