@@ -1,6 +1,6 @@
 'use client'
 
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { fmtTime } from '@/lib/types'
 
 /**
@@ -137,23 +137,46 @@ function Markdown({ text }: { text: string }) {
   return <>{blocks}</>
 }
 
-export default function AnswerView({ antworten }: { antworten: { t: string; text: string }[] }) {
+/**
+ * Zieht aus einer Antwort die Stellen, die eine Reaktion des Menschen
+ * verlangen: Fragen und Aufforderungen. Heuristik, kein Modellaufruf — sie
+ * findet das meiste, weil Claude Rückfragen als eigene Zeile ans Ende stellt.
+ */
+function extrahiereBedarf(text: string): string[] {
+  // Codeblöcke enthalten Fragezeichen, die keine Fragen sind.
+  const ohneCode = text.replace(/```[\s\S]*?```/g, '')
+  const zeilen = ohneCode
+    .split('\n')
+    .map((z) => z.replace(/^[\s>#*•\-\d.)]+/, '').replace(/\*\*/g, '').trim())
+    .filter(Boolean)
+  const aufforderung =
+    /^(soll ich|möchtest du|willst du|brauchst du|bitte (gib|sag|prüf|bestätig|entscheid|schick)|sag (mir |)bescheid|entscheide|gib mir|wie soll|was soll|welche[rs]? (variante|option|weg))/i
+  const fragen = zeilen.filter((z) => (z.endsWith('?') && z.length > 12) || aufforderung.test(z))
+  return [...new Set(fragen)].slice(-5)
+}
+
+export default function AnswerView({
+  antworten,
+  wartet = false,
+}: {
+  antworten: { t: string; text: string }[]
+  wartet?: boolean
+}) {
   const box = useRef<HTMLDivElement>(null)
   const letzte = useRef<HTMLDivElement>(null)
   const anzahl = antworten.length
+  /** Auf-/Zugeklappt je Antwort. Ohne Eintrag gilt: nur die neueste offen. */
+  const [offen, setOffen] = useState<Record<number, boolean>>({})
 
   /**
    * Beim Öffnen der Ansicht (und bei jeder neuen Antwort) steht die *neueste*
-   * im Bild — nicht die älteste. Der Wechsel von „Rollen" auf „Antwort" hängt
-   * die Ansicht neu ein, sie stünde sonst jedes Mal wieder ganz oben.
-   * `useLayoutEffect`, damit der Sprung vor dem ersten Bild passiert.
+   * im Bild — nicht die älteste. `useLayoutEffect`, damit der Sprung vor dem
+   * ersten Bild passiert.
    */
   useLayoutEffect(() => {
     const b = box.current
     const l = letzte.current
     if (!b || !l) return
-    // Passt die letzte Antwort ganz ins Bild, ans Ende scrollen; ist sie
-    // länger, an ihren Anfang — sonst landet man mitten im Text.
     const passt = l.offsetHeight <= b.clientHeight
     b.scrollTop = passt ? b.scrollHeight : Math.max(0, l.offsetTop - 12)
   }, [anzahl])
@@ -166,36 +189,87 @@ export default function AnswerView({ antworten }: { antworten: { t: string; text
     )
   }
 
+  const neueste = antworten[anzahl - 1]
+  const bedarf = extrahiereBedarf(neueste.text)
+
   return (
-    <div
-      className="stage"
-      ref={box}
-      style={{ overflowY: 'auto', padding: '18px 22px', fontSize: 13.5, color: 'var(--color-neutral-200)' }}
-    >
-      {antworten.map((a, i) => (
-        <div
-          key={i}
-          ref={i === antworten.length - 1 ? letzte : undefined}
-          style={{ marginBottom: i === antworten.length - 1 ? 0 : 26 }}
-        >
-          <div
-            className="kicker"
-            style={{ marginBottom: 8, display: 'flex', gap: 8, alignItems: 'center', position: 'sticky', top: -18, background: 'var(--color-bg)', paddingTop: 4 }}
-          >
-            Antwort {i + 1} · {fmtTime(a.t)}
-            <button
-              className="btn btn-ghost"
-              style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
-              onClick={() => navigator.clipboard?.writeText(a.text)}
-            >
-              <i className="ph ph-copy" /> kopieren
-            </button>
-          </div>
-          <div style={{ maxWidth: 780 }}>
-            <Markdown text={a.text} />
-          </div>
+    <div className="stage" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* Was jetzt gebraucht wird, steht über dem Text — nicht darin begraben. */}
+      {(bedarf.length > 0 || wartet) && (
+        <div className="fragebox" style={{ margin: '12px 14px 0', flex: 'none' }}>
+          <div className="kicker">Das braucht die Session von dir</div>
+          {bedarf.length > 0 ? (
+            bedarf.map((f, i) => (
+              <div key={i} className="fragezeile">
+                {f}
+              </div>
+            ))
+          ) : (
+            <div className="fragezeile">Rückmeldung frei — keine konkrete Frage erkannt, Kern steht unten.</div>
+          )}
         </div>
-      ))}
+      )}
+
+      <div
+        ref={box}
+        style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '14px 22px 18px', fontSize: 13.5, color: 'var(--color-neutral-200)' }}
+      >
+        {antworten.map((a, i) => {
+          const istLetzte = i === anzahl - 1
+          const auf = offen[i] ?? istLetzte
+          const erste = a.text.trim().split('\n').find((z) => z.trim()) ?? ''
+          if (!auf) {
+            return (
+              <button
+                key={i}
+                className="antwortzeile"
+                style={{ marginBottom: 8 }}
+                onClick={() => setOffen((o) => ({ ...o, [i]: true }))}
+                title="Aufklappen"
+              >
+                <i className="ph ph-caret-right" style={{ fontSize: 11, flex: 'none' }} />
+                <span style={{ flex: 'none', color: 'var(--color-neutral-600)' }}>
+                  {i + 1} · {fmtTime(a.t)}
+                </span>
+                <span className="truncate" style={{ minWidth: 0 }}>
+                  {erste.replace(/^#+\s*/, '').replace(/\*\*/g, '')}
+                </span>
+                <span style={{ marginLeft: 'auto', flex: 'none', color: 'var(--color-neutral-600)' }}>
+                  {a.text.length > 1200 ? `${Math.round(a.text.length / 1000)}k Zeichen` : ''}
+                </span>
+              </button>
+            )
+          }
+          return (
+            <div key={i} ref={istLetzte ? letzte : undefined} style={{ marginBottom: istLetzte ? 0 : 22 }}>
+              <div
+                className="kicker"
+                style={{ marginBottom: 8, display: 'flex', gap: 8, alignItems: 'center', position: 'sticky', top: -14, background: 'var(--color-bg)', paddingTop: 4, zIndex: 1 }}
+              >
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 10, padding: '1px 6px' }}
+                  onClick={() => setOffen((o) => ({ ...o, [i]: false }))}
+                  title="Zuklappen"
+                >
+                  <i className="ph ph-caret-down" />
+                </button>
+                Antwort {i + 1} · {fmtTime(a.t)}
+                <button
+                  className="btn btn-ghost"
+                  style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px' }}
+                  onClick={() => navigator.clipboard?.writeText(a.text)}
+                >
+                  <i className="ph ph-copy" /> kopieren
+                </button>
+              </div>
+              <div style={{ maxWidth: 780 }}>
+                <Markdown text={a.text} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

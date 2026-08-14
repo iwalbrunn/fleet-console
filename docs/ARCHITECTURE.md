@@ -84,6 +84,20 @@ Agent tool. A role does not have that tool and then burns turns explaining
 that it can't — measured at 4 requests instead of 2. Role runs therefore set
 `SECURITY_REVIEW_GATE=off`; the hook script provides that off switch itself.
 
+The reverse direction exists too: the hook cannot know that a review already
+happened inside the session, because it only writes its per-state hash marker
+when it blocks. The console therefore calls `security-review-gate.sh mark`
+after a role run that included the `security-reviewer` — same hash logic, same
+marker file, so the hook stays quiet for a state that has been reviewed. The
+hash lives in the gate script only; the console never re-implements it.
+
+Review economy in general: the orchestrator prompt asks for reviews **once at
+the end** of a task (not after every step), tells each subagent to report
+findings only (file:line, 1–2 sentences, nothing about what is fine), and a
+repeated default role run hands a role its previous findings plus the new diff
+instead of the full review task. Measured before the change: a single session
+delegated to `business-analyst` sixteen times.
+
 ### `--settings '{"hooks":{}}'` does not disable hooks
 
 Settings are merged, and an empty object removes nothing. Tested and

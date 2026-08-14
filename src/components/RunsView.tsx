@@ -42,7 +42,7 @@ export default function RunsView() {
   })
 
   return (
-    <div style={{ gridColumn: '2 / 4', display: 'flex', gap: 18, padding: 18, minWidth: 0, overflow: 'hidden' }}>
+    <div className="runswrap" style={{ gridColumn: '2 / 4', display: 'flex', gap: 18, padding: 18, minWidth: 0, overflow: 'hidden' }}>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto' }}>
         <div>
           <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 500, fontSize: 16 }}>Verläufe</div>
@@ -127,7 +127,7 @@ export default function RunsView() {
         </div>
       </div>
 
-      <div style={{ width: 430, flex: 'none', overflowY: 'auto' }}>
+      <div className="runsdetail" style={{ width: 430, flex: 'none', overflowY: 'auto' }}>
         <div className="card elev-sm" style={{ gap: 12 }}>
           <div className="card-kicker">Bericht</div>
           {!detail && <div style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>Lauf auswählen …</div>}

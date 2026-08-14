@@ -53,7 +53,6 @@ a:hover {
 
 .shell {
   height: 100vh;
-  min-width: 860px;
   display: grid;
   /* minmax(0,1fr): eine 1fr-Zeile hat als Mindesthöhe die Inhaltsgröße —
      ein hoher Inhalt sprengt sonst das Raster und wächst über 100vh hinaus. */
@@ -486,4 +485,130 @@ textarea.input {
   width: 100%;
   animation: none;
   background: #b4545a;
+}
+
+/* — Antwort-Ansicht: erst die Frage, dann der Text — */
+
+/* Was die Session jetzt vom Menschen braucht — immer oben, nie im Textberg. */
+.fragebox {
+  border: 1px solid #c8a06a;
+  background: rgba(200, 160, 106, 0.12);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fragebox .kicker {
+  color: #e2c79b;
+}
+.fragezeile {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #f0e2c8;
+  display: flex;
+  gap: 8px;
+}
+.fragezeile::before {
+  content: '→';
+  color: #c8a06a;
+  flex: none;
+}
+
+/* Eingeklappte ältere Antwort: eine Zeile, Klick öffnet. */
+.antwortzeile {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-neutral-400);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.antwortzeile:hover {
+  color: var(--color-text);
+  background: rgba(233, 233, 237, 0.04);
+}
+
+/* — Verläufe: Liste + Bericht stapeln sich, statt zu klemmen — */
+@media (max-width: 980px) {
+  .runswrap {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .runswrap > div:first-child {
+    overflow-y: visible;
+    flex: none;
+  }
+  .runsdetail {
+    width: auto !important;
+    overflow-y: visible !important;
+  }
+}
+@media (max-width: 760px) {
+  .runrow {
+    grid-template-columns: 84px minmax(0, 1fr) 92px;
+  }
+  .runrow > :nth-child(3),
+  .runrow > :nth-child(4),
+  .runrow > :nth-child(5) {
+    display: none;
+  }
+}
+
+/* — Schmale Fenster: Seitenspalten werden Schubladen über dem Inhalt — */
+.drawer {
+  position: fixed;
+  top: 52px;
+  bottom: 0;
+  z-index: 40;
+  width: min(340px, 88vw);
+  background: var(--color-surface, #1b1c28);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.55);
+}
+.drawer-links {
+  left: 0;
+  border-right: 1px solid var(--color-divider);
+}
+.drawer-rechts {
+  right: 0;
+  border-left: 1px solid var(--color-divider);
+}
+.drawer-backdrop {
+  position: fixed;
+  inset: 52px 0 0 0;
+  z-index: 35;
+  background: rgba(10, 11, 18, 0.55);
+  border: none;
+  cursor: pointer;
+}
+
+@media (max-width: 1000px) {
+  .untertitel {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .topbar {
+    gap: 12px;
+    padding: 0 12px;
+  }
+  .topbar-pills .pill:last-child {
+    display: none;
+  }
+  .topbar-pills .pill {
+    max-width: 44vw;
+    overflow: hidden;
+  }
+  .topbar-pills select {
+    max-width: 36vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }

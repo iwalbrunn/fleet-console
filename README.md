@@ -104,6 +104,15 @@ everything settles and nobody is working, the simulation stops — otherwise the
 chips would be a moving target and the fan would run forever. Clicking a node
 opens the side panel with its task, usage and full reply.
 
+**The answer view** puts what matters first: a highlighted box on top lists
+the questions and requests extracted from the latest reply — the things the
+session actually needs from you — before any prose. Older replies collapse to
+one line each (timestamp plus first line) and expand on click, so a long
+session does not greet you with a wall of text.
+
+The layout is responsive: on narrow windows the two side columns turn into
+drawers that slide over the content instead of squeezing it.
+
 ### Role runs
 
 The **Rollenlauf** (role run) button below the graph starts every selected
@@ -138,11 +147,24 @@ point before — a round could end without any review at all.
 - **Its own accounting** per role: tokens, requests and duration sit on the
   node.
 - The full reply is written to `reports/<run>-<role>.md`.
+- **Roles that the diff does not touch are skipped.** With the default review
+  task, `ux-ui-expert` only runs when the diff actually contains UI files —
+  the node says so instead of silently burning a session on nothing.
+- **Re-check instead of full review.** If a role already reviewed this
+  session, the next default run hands it its own previous findings plus the
+  new diff and asks only: which of these are fixed, and is anything new in
+  the changed spots? That is far cheaper than reviewing the whole diff again.
 
 Role runs set `SECURITY_REVIEW_GATE=off`. Otherwise the stop hook asks *every*
 session to start the `security-reviewer` through the Agent tool — a tool a
 role does not even have. It then burns turns explaining that it can't. The
 role run *is* the review.
+
+After a role run that included the `security-reviewer` finishes cleanly, the
+console marks the current working state as reviewed
+(`security-review-gate.sh mark`). The stop hook of the main session then
+recognises the state and does not demand a second review of the same diff —
+one review per state, no matter who triggered it.
 
 ![Configuring a role run](docs/screenshots/rollenlauf.webp)
 

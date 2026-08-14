@@ -53,6 +53,10 @@ export default function Page() {
   const [antworten, setAntworten] = useState<{ t: string; text: string }[]>([])
   const [links, setLinks] = useState(270)
   const [rechts, setRechts] = useState(348)
+  // Schmales Fenster: die Seitenspalten passen nicht mehr neben den Inhalt
+  // und werden zu Schubladen, die über ihm liegen.
+  const [schmal, setSchmal] = useState(false)
+  const [schublade, setSchublade] = useState<'links' | 'rechts' | null>(null)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
@@ -93,7 +97,6 @@ export default function Page() {
           setModel(wieder.model)
           setPicked(wieder.roles)
           setSkip(wieder.skipPermissions)
-          setMitRollen(wieder.roles)
           setProject(wieder.project)
           const eintrag = (d.projects ?? []).find((p: ProjectEntry) => p.paths.includes(wieder.project))
           if (eintrag) setProjectId(eintrag.id)
@@ -111,6 +114,17 @@ export default function Page() {
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 980px)')
+    const anwenden = () => {
+      setSchmal(mq.matches)
+      if (!mq.matches) setSchublade(null)
+    }
+    anwenden()
+    mq.addEventListener('change', anwenden)
+    return () => mq.removeEventListener('change', anwenden)
   }, [])
 
   // Spaltenbreiten über Sitzungen hinweg merken
@@ -147,7 +161,8 @@ export default function Page() {
     const bewegen = (e: PointerEvent) => {
       const delta = seite === 'links' ? e.clientX - startX : startX - e.clientX
       const neu = Math.max(0, Math.min(720, startBreite + delta))
-      seite === 'links' ? setLinks(neu) : setRechts(neu)
+      if (seite === 'links') setLinks(neu)
+      else setRechts(neu)
     }
     const loslassen = () => {
       window.removeEventListener('pointermove', bewegen)
@@ -216,7 +231,7 @@ export default function Page() {
       return
     }
     setSession(data.session)
-    setMitRollen(picked)
+    setMitRollen([])
     setSessions((prev) => [data.session, ...prev])
     setNodes(data.session.nodes)
     setLog(data.session.log)
@@ -226,12 +241,11 @@ export default function Page() {
 
   const send = async () => {
     if (!session || !draft.trim()) return
-    // Ohne ausdrücklichen Auftrag delegiert der Orchestrator bei Folgefragen
-    // meist gar nicht — die gewählten Rollen werden deshalb angehängt.
+    // Die Delegations-Grundregeln stehen im Systemprompt jeder Runde. Der
+    // Anhang hier ist nur für den Fall, dass Rollen ausdrücklich angehakt
+    // sind — kurz, sonst zwingt jede Folgefrage eine neue Review-Runde auf.
     const auftrag = mitRollen.length
-      ? `\n\n---\nZieh dafür die Subagenten ${mitRollen.map((r) => `\`${r}\``).join(', ')} über das ` +
-        `Agent-Tool hinzu: gib jedem den Teil der Aufgabe, der in seine Rolle fällt, warte auf ihre ` +
-        `Rückmeldungen und fasse sie danach zusammen. Erledige ihre Anteile nicht selbst.`
+      ? `\n\n---\nBeauftrage dafür ${mitRollen.map((r) => `\`${r}\``).join(', ')} über das Agent-Tool, jeweils mit dem Teil, der in die Rolle fällt.`
       : ''
     const text = draft.trim() + auftrag
     setDraft('')
@@ -496,13 +510,13 @@ export default function Page() {
       className="shell"
       style={{
         gridTemplateColumns:
-          tab === 'konsole'
+          tab === 'konsole' && !schmal
             ? `${links}px minmax(0, 1fr) ${rechts}px`
             : `0px minmax(0, 1fr) 0px`,
         position: 'relative',
       }}
     >
-      {tab === 'konsole' && (
+      {tab === 'konsole' && !schmal && (
       <div
         className="resizer"
         style={{ left: links - 3 }}
@@ -511,7 +525,7 @@ export default function Page() {
         title="Ziehen zum Ändern, Doppelklick klappt ein"
       />
       )}
-      {tab === 'konsole' && (
+      {tab === 'konsole' && !schmal && (
       <div
         className="resizer"
         style={{ right: rechts - 3 }}
@@ -526,7 +540,7 @@ export default function Page() {
           <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 500, fontSize: 14, letterSpacing: '.14em' }}>
             FLEET
           </div>
-          <div style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>Lokale Agenten-Konsole</div>
+          <div className="untertitel" style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>Lokale Agenten-Konsole</div>
         </div>
         <nav style={{ display: 'flex', gap: 6 }}>
           <button className="navbtn" data-active={tab === 'konsole'} onClick={() => setTab('konsole')}>
@@ -539,7 +553,7 @@ export default function Page() {
             Hooks
           </button>
         </nav>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="topbar-pills" style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <div className="pill">
             <span
               style={{
@@ -582,29 +596,35 @@ export default function Page() {
         </div>
       </header>
 
-      {tab === 'konsole' && links === 0 && (
+      {tab === 'konsole' && (schmal ? schublade !== 'links' : links === 0) && (
         <button
           className="aufklappen"
           style={{ left: 0 }}
-          onClick={() => setLinks(270)}
+          onClick={() => (schmal ? setSchublade('links') : setLinks(270))}
           title="Session-Spalte einblenden"
         >
           <i className="ph ph-caret-right" />
         </button>
       )}
-      {tab === 'konsole' && rechts === 0 && (
+      {tab === 'konsole' && (schmal ? schublade !== 'rechts' : rechts === 0) && (
         <button
           className="aufklappen"
           style={{ right: 0 }}
-          onClick={() => setRechts(348)}
+          onClick={() => (schmal ? setSchublade('rechts') : setRechts(348))}
           title="Live-Feed einblenden"
         >
           <i className="ph ph-caret-left" />
         </button>
       )}
+      {tab === 'konsole' && schmal && schublade && (
+        <button className="drawer-backdrop" onClick={() => setSchublade(null)} title="Schließen" />
+      )}
 
-      {tab === 'konsole' && (
-      <aside className="sidebar" style={{ display: links === 0 ? 'none' : undefined }}>
+      {tab === 'konsole' && (!schmal || schublade === 'links') && (
+      <aside
+        className={`sidebar${schmal ? ' drawer drawer-links' : ''}`}
+        style={{ display: !schmal && links === 0 ? 'none' : undefined }}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div className="kicker">{prozessLebt ? 'Laufende Session' : 'Neue Session'}</div>
 
@@ -907,9 +927,11 @@ export default function Page() {
 
       {tab === 'konsole' && (
         <>
-          <main style={{ display: 'flex', flexDirection: 'column', padding: '14px 18px 12px', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 6 }}>
-              <div style={{ minWidth: 0 }}>
+          {/* Feste Spalte: fällt die Sidebar im schmalen Modus aus dem DOM,
+              würde die Auto-Platzierung main sonst in die 0px-Spalte schieben. */}
+          <main style={{ gridColumn: 2, display: 'flex', flexDirection: 'column', padding: '14px 18px 12px', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 14px', marginBottom: 6 }}>
+              <div style={{ minWidth: 160, flex: '1 1 200px' }}>
                 <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 500, fontSize: 16, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {session ? session.prompt.slice(0, 70) : 'Keine laufende Session'}
                 </div>
@@ -920,7 +942,7 @@ export default function Page() {
                     : 'Links Projekt, Modell und Rollen wählen'}
                 </div>
               </div>
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: 'var(--color-neutral-400)' }}>
+              <div style={{ marginLeft: 'auto', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 16px', fontSize: 12, color: 'var(--color-neutral-400)' }}>
                 <div className="seg">
                   <label className="seg-opt" style={{ padding: '4px 10px', fontSize: 12 }}>
                     <input
@@ -984,7 +1006,7 @@ export default function Page() {
                 </div>
               </div>
             ) : ansicht === 'antwort' ? (
-              <AnswerView antworten={antwortenAnzeige} />
+              <AnswerView antworten={antwortenAnzeige} wartet={wartet} />
             ) : (
             <AgentGraph
               nodes={
@@ -1159,12 +1181,15 @@ export default function Page() {
 
           </main>
 
+          {(!schmal || schublade === 'rechts') && (
           <section
+            className={schmal ? 'drawer drawer-rechts' : undefined}
             style={{
               display: 'flex',
               flexDirection: 'column',
               padding: '14px 16px 12px',
               minWidth: 0,
+              overflowY: schmal ? 'auto' : undefined,
               background:
                 'linear-gradient(to bottom,transparent,rgba(233,233,237,.12) 48px,rgba(233,233,237,.12) calc(100% - 48px),transparent) no-repeat left / 1px 100%',
             }}
@@ -1353,6 +1378,7 @@ export default function Page() {
               </button>
             </div>
           </section>
+          )}
         </>
       )}
 

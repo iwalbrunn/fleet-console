@@ -9,6 +9,7 @@ import {
   CLAUDE_BIN,
   DIFF_MAX,
   GRACE_SEC,
+  HOME,
   PIPELINE_MODEL,
   PIPELINE_PARALLEL,
   REPORTS_DIR,
@@ -192,9 +193,8 @@ function buildPrompt(roles: string[], prompt: string): string {
     '---',
     `Für diese Aufgabe stehen folgende Subagenten bereit: ${list}.`,
     'Beauftrage sie über das Agent-Tool — jeden mit dem Teil, der in seine Rolle fällt — und erledige',
-    'ihre Anteile nicht selbst. Bei einer Umsetzung heißt das mindestens: nach der Änderung den',
-    'security-reviewer und den senior-developer über den Diff laufen lassen, sofern sie oben genannt sind.',
-    'Warte ihre Rückmeldungen ab und fasse sie am Ende zusammen — kurz, mit dem, was offen bleibt.',
+    'ihre Anteile nicht selbst. Reviews laufen EINMAL am Ende der Aufgabe über den fertigen Diff,',
+    'nicht nach jedem Zwischenschritt. Fasse ihre Rückmeldungen kurz zusammen — nur Befunde, kein Lob.',
   ].join('\n')
 }
 
@@ -206,16 +206,20 @@ export function orchestratorAuftrag(roles: string[]): string {
     'Du arbeitest in dieser Sitzung als Orchestrator einer Rollenrunde.',
     `Verfügbare Subagenten: ${liste}.`,
     '',
-    'Regeln, die für jede Runde gelten — auch für Folgeaufträge:',
+    'Regeln — auch für Folgeaufträge:',
     '- Fällt ein Teil der Arbeit in die Rolle eines dieser Subagenten, beauftragst du ihn über das',
     '  Agent-Tool, statt ihn selbst zu erledigen.',
-    '- Nach jeder Umsetzung von Code läufst du den Diff über die verfügbaren Prüfrollen:',
-    '  `security-reviewer` für Sicherheit, `senior-developer` für Qualität und Architektur,',
-    '  `business-analyst` für die fachliche Abnahme, `project-manager` für Status und Risiken.',
-    '  Nur die, die oben wirklich genannt sind.',
-    '- Du wartest ihre Rückmeldungen ab und gibst sie im Ergebnis wieder — kurz, mit Quelle',
-    '  („laut security-reviewer …").',
-    '- Sag ausdrücklich, wenn du bewusst keine Rolle beauftragt hast, und warum.',
+    '- Reviews (security-reviewer, senior-developer, business-analyst, project-manager) laufen',
+    '  EINMAL, am Ende der gesamten Aufgabe, über den fertigen Diff — NICHT nach jedem',
+    '  Zwischenschritt und nicht erneut nach kleinen Korrekturen. Nach einer Nachbesserung genügt',
+    '  es, der Rolle ihre offenen Befunde und den Folge-Diff zu geben („welche sind behoben?").',
+    '- Skaliere den Aufwand: kleine Änderung (wenige Zeilen, Doku, Umbenennung) → höchstens eine',
+    '  passende Rolle oder gar keine; nur substanzielle Umsetzungen brauchen mehrere Prüfrollen.',
+    '  Rollen, deren Bereich der Diff nicht berührt (z. B. UI-Rolle ohne UI-Änderung), lässt du weg.',
+    '- Gib jedem Subagenten ein Ausgabe-Budget mit: nur Befunde, je Befund Datei:Zeile plus 1–2',
+    '  Sätze, keine Zusammenfassung des Prüfumfangs, keine Auflistung dessen, was in Ordnung ist.',
+    '- Gib ihre Rückmeldungen im Ergebnis wieder — nur die Befunde, mit Quelle („laut security-reviewer …").',
+    '- Sag in einem Satz, wenn du bewusst keine Rolle beauftragt hast, und warum.',
   ].join('\n')
 }
 
@@ -870,9 +874,20 @@ const PRUEFAUFTRAG_MIT_STAND = [
   'sag das in einem Satz. Nimm keine Änderungen vor.',
 ].join(' ')
 
+/** Auftrag für die Nachprüfung: die Rolle kennt ihre Befunde schon — sie soll
+ *  nur abhaken statt den ganzen Diff noch einmal von vorn zu reviewen. */
+const NACHPRUEFUNGS_AUFTRAG = [
+  'NACHPRÜFUNG: Unten stehen deine Befunde aus dem letzten Lauf und der aktuelle Arbeitsstand.',
+  'Prüfe ausschließlich: (1) Welche deiner Befunde sind jetzt behoben, welche offen? (2) Neue',
+  'Befunde nur an den seither geänderten Stellen. Antworte als kurze Liste — je Altbefund',
+  '„behoben" oder „offen" mit einem Halbsatz, neue Befunde in deinem Rollen-Ausgabeformat.',
+  'Wiederhole den alten Bericht nicht. Nimm keine Änderungen vor.',
+].join(' ')
+
 export interface Arbeitsstand {
   text: string
   dateien: number
+  pfade: string[]
   gekuerzt: boolean
 }
 
@@ -896,7 +911,8 @@ async function sammleArbeitsstand(project: string): Promise<Arbeitsstand | null>
     return null
   }
   const zeilen = status.split('\n').filter((l) => l.trim())
-  if (!zeilen.length) return { text: '', dateien: 0, gekuerzt: false }
+  const pfade = zeilen.map((l) => l.slice(3).trim().replace(/.* -> /, ''))
+  if (!zeilen.length) return { text: '', dateien: 0, pfade: [], gekuerzt: false }
 
   let diff = ''
   try {
@@ -929,7 +945,7 @@ async function sammleArbeitsstand(project: string): Promise<Arbeitsstand | null>
     text = text.slice(0, DIFF_MAX) + '\n\n[… gekürzt — den Rest bei Bedarf selbst nachlesen]'
     gekuerzt = true
   }
-  return { text, dateien: zeilen.length, gekuerzt }
+  return { text, dateien: zeilen.length, pfade, gekuerzt }
 }
 
 interface RollenErgebnis {
@@ -1081,6 +1097,49 @@ export async function runPipeline(
     ? `${grundauftrag}\n\n[+ Arbeitsstand angehängt: ${stand.dateien} Datei(en), ${stand.text.length} Zeichen${stand.gekuerzt ? ', gekürzt' : ''}]`
     : grundauftrag
 
+  // Rollen, deren Bereich der Diff gar nicht berührt, laufen nicht mit. Nur
+  // beim Standard-Prüfauftrag — ein eigener Auftrag kann alles meinen.
+  let aktiveRollen = [...rollen]
+  if (!eigenerAuftrag && stand?.pfade.length) {
+    const uiDatei = /\.(tsx|jsx|css|scss|astro|vue|svelte|html)$/i
+    if (aktiveRollen.includes('ux-ui-expert') && !stand.pfade.some((p) => uiDatei.test(p))) {
+      aktiveRollen = aktiveRollen.filter((r) => r !== 'ux-ui-expert')
+      push(s, {
+        agent: 'ux-ui-expert',
+        kind: 'system',
+        text: 'übersprungen — keine UI-Dateien im Diff',
+      })
+      setNode(s, 'ux-ui-expert', { status: 'idle', phase: 'übersprungen · keine UI im Diff' })
+    }
+  }
+  if (!aktiveRollen.length) {
+    return { ok: false, error: 'Alle gewählten Rollen wurden übersprungen — der Diff berührt ihre Bereiche nicht.' }
+  }
+
+  // Nachprüfung statt Voll-Review: Wer in dieser Session schon einmal über
+  // den Stand gelaufen ist, bekommt seine Befunde und den Folge-Diff — nicht
+  // noch einmal den Komplettauftrag.
+  const vorbefunde = new Map<string, string>()
+  if (!eigenerAuftrag && stand?.text) {
+    for (const n of s.state.nodes) {
+      if (n.quelle === 'rollenlauf' && n.status === 'done' && n.volltext.trim() && aktiveRollen.includes(n.id)) {
+        vorbefunde.set(n.id, n.volltext)
+      }
+    }
+  }
+  const auftragFuer = (rolle: string): { text: string; anzeige: string; nachpruefung: boolean } => {
+    const vor = vorbefunde.get(rolle)
+    if (vor && stand?.text) {
+      const alt = vor.length > 12000 ? vor.slice(0, 12000) + '\n[… gekürzt]' : vor
+      return {
+        text: `${NACHPRUEFUNGS_AUFTRAG}\n\n## Deine Befunde aus dem letzten Lauf\n\n${alt}\n\n---\n\n## Aktueller Arbeitsstand (${stand.dateien} Datei(en))\n\n${stand.text}`,
+        anzeige: `${NACHPRUEFUNGS_AUFTRAG}\n\n[+ voriger Bericht und Arbeitsstand angehängt]`,
+        nachpruefung: true,
+      }
+    }
+    return { text: auftrag, anzeige: auftragAnzeige, nachpruefung: false }
+  }
+
   // Nur für die Anzeige: welches Modell greift je Rolle?
   const modellJeRolle = new Map<string, string>()
   if (!gewaehltesModell) {
@@ -1093,16 +1152,23 @@ export async function runPipeline(
 
   s.pipelineLaeuft = true
   s.state.pipelineAktiv = true
-  s.state.pipelineRollen = rollen
-  const parallel = Math.min(PIPELINE_PARALLEL, rollen.length)
+  s.state.pipelineRollen = aktiveRollen
+  const parallel = Math.min(PIPELINE_PARALLEL, aktiveRollen.length)
   const modellText = gewaehltesModell
     ? gewaehltesModell
-    : rollen.map((r) => `${r}=${modellJeRolle.get(r) ?? PIPELINE_MODEL}`).join(' ')
+    : aktiveRollen.map((r) => `${r}=${modellJeRolle.get(r) ?? PIPELINE_MODEL}`).join(' ')
   push(s, {
     agent: 'system',
     kind: 'system',
-    text: `Rollenlauf gestartet · ${rollen.join(', ')} · ${modellText} · ${parallel} gleichzeitig`,
+    text: `Rollenlauf gestartet · ${aktiveRollen.join(', ')} · ${modellText} · ${parallel} gleichzeitig`,
   })
+  if (vorbefunde.size) {
+    push(s, {
+      agent: 'system',
+      kind: 'system',
+      text: `Nachprüfung statt Voll-Review für: ${[...vorbefunde.keys()].join(', ')} — nur Befund-Status und geänderte Stellen.`,
+    })
+  }
   if (stand?.text) {
     push(s, {
       agent: 'system',
@@ -1114,14 +1180,14 @@ export async function runPipeline(
 
   // Reihenfolge vorab festlegen, damit die Nummerierung stabil bleibt,
   // obwohl die Rollen gleichzeitig arbeiten.
-  for (const rolle of rollen) {
+  for (const rolle of aktiveRollen) {
     const n = node(s, rolle)
     setNode(s, rolle, {
       status: 'running',
       phase: 'wartet auf einen Platz',
       calls: n.calls + 1,
       order: n.order ?? ++s.orderCounter,
-      auftrag: auftragAnzeige,
+      auftrag: auftragFuer(rolle).anzeige,
       quelle: 'rollenlauf',
       volltext: '',
       ergebnis: '',
@@ -1130,7 +1196,7 @@ export async function runPipeline(
     })
   }
 
-  const warteschlange = [...rollen]
+  const warteschlange = [...aktiveRollen]
 
   const arbeite = async () => {
     for (;;) {
@@ -1141,10 +1207,15 @@ export async function runPipeline(
         continue
       }
       const rollenModell = gewaehltesModell ?? modellJeRolle.get(rolle) ?? null
+      const a = auftragFuer(rolle)
       setNode(s, rolle, { phase: `arbeitet (eigene Session${rollenModell ? `, ${rollenModell}` : ''})` })
-      push(s, { agent: rolle, kind: 'agent', text: `Rollenlauf: ${grundauftrag.slice(0, 90)}` })
+      push(s, {
+        agent: rolle,
+        kind: 'agent',
+        text: a.nachpruefung ? 'Nachprüfung der eigenen Befunde' : `Rollenlauf: ${grundauftrag.slice(0, 90)}`,
+      })
 
-      const r = await laufeRolle(s, rolle, gewaehltesModell, auftrag)
+      const r = await laufeRolle(s, rolle, gewaehltesModell, a.text)
       s.state.tokensOut += r.tokensOut
       s.state.tokensIn += r.tokensIn
       s.state.anfragen += r.anfragen
@@ -1193,10 +1264,35 @@ export async function runPipeline(
 
   await Promise.all(Array.from({ length: parallel }, arbeite))
 
-  const fehlgeschlagen = rollen.filter((r) => {
+  const fehlgeschlagen = aktiveRollen.filter((r) => {
     const n = s.state.nodes.find((x) => x.id === r)
     return n && n.status !== 'done'
   })
+
+  // Der Stop-Hook der Haupt-Session weiß nichts von diesem Review und würde
+  // denselben Änderungsstand am Sitzungsende noch einmal anstoßen. Der Marker
+  // sagt ihm: schon geprüft. Die Hash-Logik liegt im Gate-Skript selbst.
+  if (
+    aktiveRollen.includes('security-reviewer') &&
+    !fehlgeschlagen.includes('security-reviewer') &&
+    s.state.claudeSessionId
+  ) {
+    try {
+      await execFile(
+        path.join(HOME, '.claude', 'scripts', 'security-review-gate.sh'),
+        ['mark', s.state.project, s.state.claudeSessionId],
+        { timeout: 20000 },
+      )
+      push(s, {
+        agent: 'system',
+        kind: 'system',
+        text: 'Security-Gate: Stand als geprüft markiert — der Stop-Hook prüft ihn nicht erneut.',
+      })
+    } catch {
+      /* Marker ist ein Extra — schlimmstenfalls prüft der Hook doppelt */
+    }
+  }
+
   push(s, {
     agent: 'system',
     kind: fehlgeschlagen.length ? 'error' : 'result',
