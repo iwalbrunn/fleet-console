@@ -2,9 +2,13 @@
   "navigation": {
     "console": "Konsole",
     "history": "Verläufe",
-    "hooks": "Hooks & Einstellungen",
+    "hooks": "Hooks",
     "toggleLanguage": "Sprache wechseln",
     "subtitle": "Lokale Agenten-Konsole"
+  },
+  "meta": {
+    "title": "Fleet Console",
+    "description": "Lokale Agenten-Konsole für Claude Code"
   },
   "project": {
     "title": "Projekt",
@@ -28,7 +32,14 @@
     "cancel": "Abbrechen",
     "clear": "Leeren",
     "interrupted": "Session unterbrochen — der Serverprozess ist gegangen. Die Unterhaltung liegt noch bei Claude.",
-    "resume": "fortsetzen"
+    "resume": "fortsetzen",
+    "autoPermissions": "Auto-Permissions",
+    "statusStartet": "startet",
+    "statusLaeuft": "läuft",
+    "statusFertig": "fertig",
+    "statusFehler": "fehler",
+    "statusAbgebrochen": "abgebrochen",
+    "statusUnterbrochen": "unterbrochen"
   },
   "stats": {
     "tokens": "Tokens",
@@ -105,7 +116,13 @@
     "roles": "Rollen",
     "summary": "Zusammenfassung",
     "participants": "Beteiligte Rollen",
-    "artifacts": "Artefakte"
+    "artifacts": "Artefakte",
+    "andMore": "… und {count} weitere",
+    "securityReview": "Security-Review",
+    "statusDone": "abgeschlossen",
+    "statusAborted": "abgebrochen",
+    "securityChecked": "geprüft",
+    "securityOpen": "offen"
   },
   "hooks": {
     "title": "Hooks & Automation",
@@ -123,7 +140,18 @@
     "saveFailed": "Speichern fehlgeschlagen",
     "cronFailed": "Crontab konnte nicht geschrieben werden",
     "saved": "settings.json geschrieben (Sicherung daneben abgelegt).",
-    "cronUpdated": "Crontab auf vps02 aktualisiert."
+    "cronUpdated": "Crontab auf vps02 aktualisiert.",
+    "nightRunsTitle": "Nachtläufe · vps02",
+    "lastRun": "Letzter Lauf",
+    "remove": "Entfernen",
+    "addNightRun": "Nachtlauf",
+    "writeToVps": "Auf vps02 schreiben",
+    "settingsJson": "hooks in settings.json",
+    "edit": "Bearbeiten",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "loading": "lade …",
+    "hooksActive": "{count, plural, one {# Hook aktiv} other {# Hooks aktiv}}"
   },
   "topbar": {
     "waitingSince": "wartet auf Eingabe · seit {time}",

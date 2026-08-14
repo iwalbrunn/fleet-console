@@ -36,6 +36,15 @@ export default function RunsView() {
       .catch(() => setDetail(null))
   }, [selected])
 
+  const statusLabel: Record<RunSummary['status'], string> = {
+    abgeschlossen: t('runs.statusDone'),
+    abgebrochen: t('runs.statusAborted'),
+  }
+  const securityLabel: Record<RunSummary['security'], string> = {
+    geprüft: t('runs.securityChecked'),
+    offen: t('runs.securityOpen'),
+  }
+
   const projekte = [...new Set(runs.map((r) => r.projectShort))].sort()
   const sichtbar = runs.filter((r) => {
     if (projekt !== 'alle' && r.projectShort !== projekt) return false
@@ -167,7 +176,7 @@ export default function RunsView() {
                 className={`tag ${run.security === 'geprüft' ? 'tag-accent' : 'tag-outline'}`}
                 style={{ fontSize: 9.5 }}
               >
-                {run.security}
+                {securityLabel[run.security]}
               </span>
               <span
                 style={{
@@ -175,7 +184,7 @@ export default function RunsView() {
                   fontSize: 11.5,
                 }}
               >
-                {run.status}
+                {statusLabel[run.status]}
               </span>
             </button>
           ))}
@@ -210,7 +219,7 @@ export default function RunsView() {
                 <Stat
                   label={t('stats.tokens')}
                   value={fmtTokens(detail.tokensIn + detail.tokensOut)}
-                  hint={`+ ${fmtTokens(detail.tokensCached)} Cache`}
+                  hint={`+ ${fmtTokens(detail.tokensCached)} ${t('stats.cache')}`}
                 />
                 <Stat label={t('runs.tools')} value={String(detail.toolCalls)} />
                 <Stat label={t('runs.roles')} value={String(detail.agentCalls)} />
@@ -237,7 +246,7 @@ export default function RunsView() {
               )}
 
               {detail.findings.length > 0 && (
-                <Section title="Security-Review">
+                <Section title={t('runs.securityReview')}>
                   {detail.findings.map((f, i) => (
                     <div
                       key={i}
@@ -287,7 +296,7 @@ export default function RunsView() {
                   ))}
                   {detail.artifacts.length > 12 && (
                     <div style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>
-                      … und {detail.artifacts.length - 12} weitere
+                      {t('runs.andMore', { count: detail.artifacts.length - 12 })}
                     </div>
                   )}
                 </Section>

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { fmtTokens, type GraphNode } from '@/lib/types'
 
@@ -53,6 +54,7 @@ export default function AgentGraph({
   /** Seitenpanel, das über der Bühne liegt. */
   detail?: ReactNode
 }) {
+  const t = useTranslations()
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const nodeRefs = useRef(new Map<string, HTMLDivElement>())
@@ -449,7 +451,7 @@ export default function AgentGraph({
             }}
           >
             {n.phase}
-            {n.tokensOut ? ` · ${fmtTokens(n.tokensOut)} aus` : ''}
+            {n.tokensOut ? ` · ${fmtTokens(n.tokensOut)} ${t('stats.out')}` : ''}
           </div>
         </div>
       ))}
