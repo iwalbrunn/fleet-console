@@ -227,8 +227,17 @@ turns the whole area off.
 
 ## Security notes
 
-- The server binds to localhost. Do not expose it: whoever reaches the API can
-  start processes in your project directories — under your Claude account.
+- The server binds to `127.0.0.1` (`npm run dev` / `npm run start` pass
+  `--hostname 127.0.0.1` — Next's own default is `0.0.0.0`, which would put
+  the console on the LAN/Tailnet). Do not expose it further: whoever reaches
+  the API can start processes in your project directories — under your Claude
+  account.
+- The four state-changing routes (`sessions`, `sessions/:id/message`, `vps`,
+  `hooks`) reject cross-origin requests: the `Origin` header, when a browser
+  sends one, must match the request's own `Host` and be a loopback address.
+  This is what stops a page open in your browser from driving the API via
+  DNS rebinding or a no-preflight CSRF request — binding to localhost alone
+  does not.
 - The **Auto-Permissions** switch sets `--dangerously-skip-permissions`.
   Required for unattended runs, but it hands the session every right your user
   has. Off by default.

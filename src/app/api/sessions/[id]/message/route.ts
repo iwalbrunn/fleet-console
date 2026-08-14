@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
+import { rejectCrossOrigin } from '@/lib/http'
 import { reconfigureSession, resumeSession, runPipeline, sendMessage, stopSession } from '@/lib/sessions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const blocked = rejectCrossOrigin(req)
+  if (blocked) return blocked
+
   const { id } = await params
   const body = await req.json().catch(() => ({}))
 

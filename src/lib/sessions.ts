@@ -973,7 +973,10 @@ async function laufeRolle(
   if (model) args.push('--model', model)
   args.push('--autocompact', AUTOCOMPACT)
   if (s.state.skipPermissions) args.push('--dangerously-skip-permissions')
-  args.push(auftrag)
+  // `--` beendet das Options-Parsing der CLI, damit ein Auftrag, der mit
+  // `--` beginnt (z. B. `--settings=…`), als Prompt-Text ankommt statt als
+  // Flag interpretiert zu werden.
+  args.push('--', auftrag)
 
   return new Promise((resolve) => {
     let text = ''

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { rejectCrossOrigin } from '@/lib/http'
 import { getVpsStatus, nightRunTemplate, saveNightRuns } from '@/lib/vps'
 
 export const runtime = 'nodejs'
@@ -10,6 +11,9 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
+  const blocked = rejectCrossOrigin(req)
+  if (blocked) return blocked
+
   const body = await req.json().catch(() => ({}))
   if (!Array.isArray(body.runs)) {
     return NextResponse.json({ error: 'Erwartet { runs: [...] }' }, { status: 400 })
@@ -25,5 +29,6 @@ export async function PUT(req: Request) {
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? String(err) }, { status: 400 })
   }
-  return NextResponse.json(await getVpsStatus())
+  const status = await getVpsStatus()
+  return NextResponse.json({ ...status, template: nightRunTemplate() })
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import fs from 'node:fs/promises'
+import { rejectCrossOrigin } from '@/lib/http'
 import { listSessions, startSession } from '@/lib/sessions'
 
 export const runtime = 'nodejs'
@@ -10,6 +11,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const blocked = rejectCrossOrigin(req)
+  if (blocked) return blocked
+
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ error: 'Ungültiger Request-Body' }, { status: 400 })
 

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { rejectCrossOrigin } from '@/lib/http'
 import { readHooks, writeHooks } from '@/lib/settings'
 
 export const runtime = 'nodejs'
@@ -9,6 +10,9 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
+  const blocked = rejectCrossOrigin(req)
+  if (blocked) return blocked
+
   const body = await req.json().catch(() => ({}))
   const result = await writeHooks(String(body.raw ?? ''))
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 })

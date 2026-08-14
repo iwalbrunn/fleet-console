@@ -98,10 +98,43 @@ repeated default role run hands a role its previous findings plus the new diff
 instead of the full review task. Measured before the change: a single session
 delegated to `business-analyst` sixteen times.
 
+### Next binds to all interfaces unless told otherwise
+
+`next dev -p 4300` and `next start -p 4300` listen on `0.0.0.0` by default —
+`lsof` confirmed a running server reachable from the LAN/Tailnet, even though
+the docs and the "no auth" design both assume localhost-only. The comment in
+`next.config.ts` describing that assumption was aspirational, not enforced.
+Fixed by passing `--hostname 127.0.0.1` in both npm scripts; `scripts/start.sh`
+inherits it since it just calls `npm run start`.
+
+Binding correctly only stops requests that arrive from another machine. A
+page open in the browser can still reach `localhost` — DNS rebinding, or a
+`fetch` with a body type that skips CORS preflight, works the same whether
+the target is `0.0.0.0` or `127.0.0.1`. The state-changing routes therefore
+also check the `Origin` header against the request's own `Host` header
+(`src/lib/http.ts`) and reject anything that is not a loopback address. The
+first version compared `Origin` against `new URL(req.url).origin` instead —
+which Next reports as `localhost` internally no matter which loopback address
+the browser actually used, so visiting the console at `127.0.0.1` (exactly
+the address `--hostname` now prints) tripped the guard on every action.
+Comparing to the `Host` header instead works regardless of which loopback
+name was used, because that header reflects the connection the browser
+actually made and JS cannot override it.
+
 ### `--settings '{"hooks":{}}'` does not disable hooks
 
 Settings are merged, and an empty object removes nothing. Tested and
 discarded.
+
+### A free-text task can look like a CLI flag
+
+`laufeRolle` appends the role's task text as the last argv item to the
+`claude` CLI, unquoted (no shell is involved, so this is not shell injection —
+but the CLI still parses its own argv). A task starting with `--`, e.g.
+`--settings={...}`, was read as an option rather than as the prompt. Fixed by
+inserting `--` before it (`args.push('--', auftrag)`), the standard
+end-of-options marker that stops the CLI's own parser from treating anything
+after it as a flag.
 
 ### "Last line is assistant" does not mean aborted
 
