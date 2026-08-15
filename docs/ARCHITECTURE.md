@@ -16,6 +16,14 @@ Browser ──HTTP──▶ Next.js (Node) ──spawn──▶ claude -p --outp
    └────────SSE─────────┘◀──────stdout (JSONL)───┘
 ```
 
+The implementation follows these boundaries:
+
+- `sessions.ts` — public application facade used by the API routes.
+- `session-runtime.ts` — in-memory registry, graph mutations, SSE and throttled persistence.
+- `claude-process.ts` / `claude-events.ts` — child-process lifecycle and typed stream handling.
+- `session-requirements.ts`, `session-storage.ts`, `session-worktrees.ts` — filesystem and Git adapters.
+- `review-pipeline.ts` — diff collection, bounded parallel role runs and re-check termination.
+
 The most important consequence: **the login is inherited.** There is no API
 key and no separate billing. Runs count against the same quota as interactive
 work in the terminal.
@@ -40,11 +48,12 @@ whether a role gets involved is up to the model. A round could end without any
 review — the console notices and says so (`Runde beendet, ohne eine einzige
 Rolle zu beauftragen`), but noticing is not preventing.
 
-The role run is the answer to that. `src/lib/sessions.ts` → `runPipeline()`.
+The role run is the answer to that. `src/lib/review-pipeline.ts` → `runPipeline()`;
+`src/lib/sessions.ts` remains the compatibility facade used by the API routes.
 
 ## The event stream
 
-`handleEvent()` processes four event types:
+`handleClaudeEvent()` in `src/lib/claude-events.ts` processes four event types:
 
 - **`system`** (`subtype: init`) — carries the `session_id`. It is the key for
   `--resume` and therefore for resuming interrupted sessions.
@@ -128,7 +137,7 @@ discarded.
 
 ### A free-text task can look like a CLI flag
 
-`laufeRolle` appends the role's task text as the last argv item to the
+`runRoleProcess` appends the role's task text as the last argv item to the
 `claude` CLI, unquoted (no shell is involved, so this is not shell injection —
 but the CLI still parses its own argv). A task starting with `--`, e.g.
 `--settings={...}`, was read as an option rather than as the prompt. Fixed by
@@ -168,12 +177,12 @@ any state change wakes it up again.
 ```
 runPipeline(id, roles, { model, task, state })
   │
-  ├─ sammleArbeitsstand()      git status + git diff HEAD + new files
+  ├─ collectWorkingState()     git status + git diff HEAD + new files
   │                            ONCE, not per role
   ├─ assign order              stable numbering despite parallelism
   │
   └─ queue, N at a time
-        └─ laufeRolle()        claude -p --agent <role> [--model]
+        └─ runRoleProcess()    claude -p --agent <role> [--model]
               ├─ time limit    SIGTERM, SIGKILL after GRACE_SEC
               ├─ tokens        counted per role
               └─ full text     reports/<run>-<role>.md

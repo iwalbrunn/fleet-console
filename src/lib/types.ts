@@ -1,3 +1,5 @@
+export type NodeStatus = 'idle' | 'running' | 'done' | 'error' | 'timeout'
+
 export interface Anforderung {
   id: string
   t: string
@@ -15,9 +17,15 @@ export interface RollenBefund {
   status?: 'neu' | 'offen' | 'behoben'
 }
 
+export interface RollenVerdict {
+  verdict: 'ok' | 'befunde'
+  befunde: RollenBefund[]
+  zusammenfassung?: string
+}
+
 export interface GraphNode {
   id: string
-  status: 'idle' | 'running' | 'done' | 'error' | 'timeout'
+  status: NodeStatus
   phase: string
   tokensOut: number
   tokensIn: number

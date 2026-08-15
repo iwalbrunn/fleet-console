@@ -1,16 +1,13 @@
 # Fleet Console
 
-![Fleet Console — a local agent console for Claude Code](docs/header.webp)
+![Fleet Console with an interrupted session, agent graph, costs and live feed](docs/screenshots/konsole.webp)
 
-A local agent console for Claude Code: start sessions and watch them live,
-run roles as their own sessions, browse past runs.
+A local control room for Claude Code: run implementation sessions with an
+external requirements list and optional worktree isolation, watch them live,
+run structured reviews as separate role sessions, and browse past runs.
 
-![The console during a role run](docs/screenshots/konsole.webp)
-
-*Three roles working at the same time, each in its own session. The feed on
-the right shows what happened before that: the round ended without the
-orchestrator delegating to a single role — which is exactly why the role run
-exists.*
+*The console keeps the execution graph, live event stream, usage, costs and
+recovery controls visible without hiding the underlying Claude CLI process.*
 
 Built from the design draft "Fleet Console for agent visualisation" in the
 **Nocturne** design system (`src/app/nocturne.css`, described in
@@ -31,7 +28,9 @@ including the traps that showed up while building it.
 > code, keep it on localhost, and treat it as what it is. It is also the reason
 > the whole thing exists. If a model writes the code, the review cannot be left
 > to the same model on a good day; it has to be assigned. That is what the role
-> run below does.
+> run below does. Requirements, process state, Git worktrees and review verdicts
+> are now owned by small, tested modules outside the model context, so a later
+> prompt cannot silently rewrite the rules of the previous one.
 
 ## Requirements
 
@@ -76,7 +75,7 @@ goes to `~/.claude/fleet-console/server.log`.
 npm run dev                  # http://localhost:4300
 ```
 
-## What the three views do
+## What the main views do
 
 **Console** — pick a project, a model and the roles, type a prompt, start the
 session. Behind it runs
@@ -117,13 +116,33 @@ The UI is bilingual (German default, English via the EN/DE toggle in the top
 bar — routes live under `/de` and `/en`). Stream content is data, not chrome:
 feed lines, role phases and reports appear as the sessions produced them.
 
+### Reliability guardrails
+
+The safeguards are intentionally outside the LLM conversation:
+
+- Every user message becomes a server-owned entry in a persistent
+  **requirements list**. The model may update only status and note fields of
+  known entries; it cannot inject or erase requirements through the file.
+- A finished or interrupted run can hand its open requirements to a **fresh
+  session**. This gives the next process a clean context instead of relying on
+  another compaction of an already overloaded conversation.
+- **Worktree isolation** gives a session and its role runs their own Git working
+  copy. An unchanged worktree is removed automatically; a worktree containing
+  changes or commits is retained and reported.
+- Session state, usage and cost are persisted independently of the process.
+  Interrupted conversations can resume through Claude's session ID.
+- Default reviews return a schema-validated verdict. Re-checks are bounded;
+  after two unsuccessful passes, unresolved findings go back to the human
+  instead of creating an endless fix-review loop.
+
 ### Role runs
 
 The **Rollenlauf** (role run) button below the graph starts every selected
 role as its own session:
 
 ```
-claude -p --output-format stream-json --verbose --agent <role> --model <m>
+claude -p --output-format stream-json --verbose --agent <role> [--model <m>]
+       [--json-schema <verdict-schema>]
 ```
 
 That is the difference from appending text to a message: it does not depend on
@@ -157,7 +176,9 @@ point before — a round could end without any review at all.
 - **Re-check instead of full review.** If a role already reviewed this
   session, the next default run hands it its own previous findings plus the
   new diff and asks only: which of these are fixed, and is anything new in
-  the changed spots? That is far cheaper than reviewing the whole diff again.
+  the changed spots? The console caps this at two re-checks per role and then
+  returns remaining findings for a human decision. That is both cheaper and
+  prevents reviews from cycling forever.
 
 Role runs set `SECURITY_REVIEW_GATE=off`. Otherwise the stop hook asks *every*
 session to start the `security-reviewer` through the Agent tool — a tool a
@@ -223,6 +244,7 @@ quota as your interactive work.
 - The **Auto-Permissions** switch sets `--dangerously-skip-permissions`.
   Required for unattended runs, but it hands the session every right your user
   has. Off by default.
+
 ## Terms of use and your account
 
 This is a wrapper around Anthropic's own CLI, not a re-implementation of it.
@@ -259,6 +281,8 @@ what this tool drives.
 | `~/.claude/projects/*/*.jsonl` | Source of the history view (read only) |
 | `~/.claude/fleet-console/runs/` | State of runs started here, written continuously |
 | `~/.claude/fleet-console/reports/` | Final text per run, plus `<run>-<role>.md` per role |
+| `~/.claude/fleet-console/anforderungen/` | Server-owned requirements list per session |
+| `~/.fleet-console/worktrees/` | Optional isolated Git working copies |
 | `~/.claude/fleet-console/gate.log` | Triggers of the security stop hook |
 
 ## Limits
@@ -280,4 +304,3 @@ what this tool drives.
 [MIT](LICENSE) — for this console only. It does not cover Claude Code, which is
 Anthropic software you install and license yourself, and it grants no rights to
 Anthropic's trademarks.
-
