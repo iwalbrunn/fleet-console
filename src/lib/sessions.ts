@@ -4,6 +4,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { listRoles } from './settings'
+import { neuerUsageZaehler, usageDelta, type UsageZaehler } from './usage'
 import {
   ANFORDERUNGEN_DIR,
   AUTOCOMPACT,
@@ -187,6 +188,8 @@ interface Session {
    *  meldet die Kosten je PROZESS kumulativ — nach einem Neustart (--resume)
    *  zählt es wieder von null, deshalb die Basis. */
   kostenBasisUsd: number
+  /** Dedupe der Usage-Angaben je API-Nachricht — siehe usage.ts. */
+  usageZaehler: UsageZaehler
 }
 
 const MAX_LOG = 400
@@ -461,6 +464,7 @@ export async function startSession(opts: {
     zuletztAbgelegt: 0,
     ablageGeplant: false,
     kostenBasisUsd: 0,
+    usageZaehler: neuerUsageZaehler(),
   }
   registry.set(id, session)
 
@@ -692,30 +696,34 @@ function handleEvent(s: Session, ev: any) {
 
     const usage = ev.message?.usage
     if (usage) {
-      // Frische Eingabe und Cache getrennt zählen: cache_read wiederholt sich
-      // bei jeder Anfrage, aufsummiert ergäbe das absurde Zahlen.
-      state.anfragen += 1
-      state.tokensIn += usage.input_tokens ?? 0
-      state.tokensCacheWrite += usage.cache_creation_input_tokens ?? 0
+      // Dieselbe Nachricht kommt als mehrere Events herein — gezählt wird
+      // nur die Differenz je Nachrichten-Id. cache_read wiederholt sich bei
+      // jeder Anfrage, aufsummiert ergäbe das absurde Zahlen.
+      const d = usageDelta(s.usageZaehler, ev.message?.id, usage)
+      if (d.neueNachricht) state.anfragen += 1
+      state.tokensIn += d.in
+      state.tokensCacheWrite += d.cacheWrite
       state.tokensCached = Math.max(state.tokensCached, usage.cache_read_input_tokens ?? 0)
-      state.tokensOut += usage.output_tokens ?? 0
-      // Auch der Orchestrator bekommt seine eigene Rechnung — sonst steht die
-      // Koordination selbst nie in den Zahlen.
-      const zielKnoten = rolle ?? 'orchestrator'
-      const n = node(s, zielKnoten)
-      setNode(s, zielKnoten, {
-        anfragen: n.anfragen + 1,
-        tokensIn: n.tokensIn + (usage.input_tokens ?? 0),
-        tokensOut: n.tokensOut + (usage.output_tokens ?? 0),
-      })
-      emit(s, 'tokens', {
-        in: state.tokensIn,
-        out: state.tokensOut,
-        cached: state.tokensCached,
-        cacheWrite: state.tokensCacheWrite,
-        anfragen: state.anfragen,
-        kosten: state.kostenUsd,
-      })
+      state.tokensOut += d.out
+      if (d.neueNachricht || d.in || d.out) {
+        // Auch der Orchestrator bekommt seine eigene Rechnung — sonst steht
+        // die Koordination selbst nie in den Zahlen.
+        const zielKnoten = rolle ?? 'orchestrator'
+        const n = node(s, zielKnoten)
+        setNode(s, zielKnoten, {
+          anfragen: n.anfragen + (d.neueNachricht ? 1 : 0),
+          tokensIn: n.tokensIn + d.in,
+          tokensOut: n.tokensOut + d.out,
+        })
+        emit(s, 'tokens', {
+          in: state.tokensIn,
+          out: state.tokensOut,
+          cached: state.tokensCached,
+          cacheWrite: state.tokensCacheWrite,
+          anfragen: state.anfragen,
+          kosten: state.kostenUsd,
+        })
+      }
     }
     const content = ev.message?.content
     if (!Array.isArray(content)) return
@@ -820,13 +828,12 @@ function handleEvent(s: Session, ev: any) {
   }
 
   if (ev.type === 'result') {
-    const usage = ev.usage
-    // total_cost_usd zählt je Prozess kumulativ — Basis addieren, nicht aufsummieren.
+    // total_cost_usd zählt je Prozess kumulativ — Basis addieren, nicht
+    // aufsummieren. Die Tokenstände kommen allein aus den deduplizierten
+    // assistant-Events; das frühere Math.max gegen result.output_tokens
+    // vermischte Rundensumme und Sessionsumme.
     if (typeof ev.total_cost_usd === 'number') {
       state.kostenUsd = s.kostenBasisUsd + ev.total_cost_usd
-    }
-    if (usage) {
-      state.tokensOut = Math.max(state.tokensOut, usage.output_tokens ?? 0)
       emit(s, 'tokens', {
         in: state.tokensIn,
         out: state.tokensOut,
@@ -1070,6 +1077,7 @@ export async function resumeSession(id: string): Promise<{ ok: boolean; error?: 
     zuletztAbgelegt: 0,
     ablageGeplant: false,
     kostenBasisUsd: state.kostenUsd,
+    usageZaehler: neuerUsageZaehler(),
   }
   registry.set(id, session)
 
@@ -1359,6 +1367,7 @@ async function laufeRolle(
   return new Promise((resolve) => {
     let text = ''
     let struktur: RollenVerdict | null = null
+    const zaehler = neuerUsageZaehler()
     let tokensIn = 0
     let tokensOut = 0
     let anfragen = 0
@@ -1414,11 +1423,12 @@ async function laufeRolle(
         try {
           const ev = JSON.parse(zeile)
           if (ev.type === 'assistant') {
-            anfragen += 1
             const u = ev.message?.usage
             if (u) {
-              tokensOut += u.output_tokens ?? 0
-              tokensIn += u.input_tokens ?? 0
+              const d = usageDelta(zaehler, ev.message?.id, u)
+              if (d.neueNachricht) anfragen += 1
+              tokensOut += d.out
+              tokensIn += d.in
             }
             for (const b of ev.message?.content ?? []) {
               if (b?.type === 'text' && b.text?.trim()) text = b.text
