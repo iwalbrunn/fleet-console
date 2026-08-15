@@ -1,0 +1,18 @@
+{
+  "projectId": "d845b849-33ed-440b-8eaa-a745fdc28f50",
+  "shape": "package",
+  "pkg": "fleet-console",
+  "globalName": "Nocturne",
+  "srcDir": "src",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": "src/app/nocturne.css",
+  "extraEntries": ["./.design-sync/preview-provider.tsx"],
+  "componentSrcMap": {
+    "AgentGraph": "src/components/AgentGraph.tsx",
+    "AnswerView": "src/components/AnswerView.tsx",
+    "LanguageSwitcher": null,
+    "HooksView": null,
+    "RunsView": null
+  },
+  "provider": { "component": "NocturneProvider" }
+}
