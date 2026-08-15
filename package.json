@@ -19,6 +19,9 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "overrides": {
+    "postcss": ">=8.5.18"
+  },
   "dependencies": {
     "@phosphor-icons/web": "^2.1.1",
     "next": "^15.5.4",
