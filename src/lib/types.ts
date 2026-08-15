@@ -116,43 +116,6 @@ export interface RunDetail extends RunSummary {
   tools: { name: string; calls: number }[]
 }
 
-export interface HookEntry {
-  event: string
-  matcher: string
-  type: string
-  command: string
-  timeout?: number
-  statusMessage?: string
-}
-
-export interface HooksView {
-  file: string
-  raw: string
-  entries: HookEntry[]
-  gateInstalled: boolean
-  gateScript: string | null
-  gateRuns: { date: string; text: string; result: string }[]
-}
-
-export interface NightRun {
-  name: string
-  schedule: string
-  command: string
-  line: string
-}
-
-export interface VpsStatus {
-  enabled: boolean
-  host: string
-  connected: boolean
-  error: string | null
-  runs: NightRun[]
-  otherLines: number
-  lastRun: string | null
-  claudeVersion: string | null
-  template: string
-}
-
 export function fmtTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} M`
   if (n >= 1000) return `${(n / 1000).toFixed(1)} k`

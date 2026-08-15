@@ -2,7 +2,6 @@
   "navigation": {
     "console": "Konsole",
     "history": "Verläufe",
-    "hooks": "Hooks",
     "toggleLanguage": "Sprache wechseln",
     "subtitle": "Lokale Agenten-Konsole"
   },
@@ -11,26 +10,17 @@
     "description": "Lokale Agenten-Konsole für Claude Code"
   },
   "project": {
-    "title": "Projekt",
-    "directory": "Projektverzeichnis",
-    "none": "— keines —",
-    "loadState": "Arbeitsstand als Kontext"
+    "title": "Projekt"
   },
   "roles": {
-    "title": "Rollen",
-    "noRolesFound": "Keine Rollen in ~/.claude/agents gefunden.",
-    "none": "— keine —"
+    "noRolesFound": "Keine Rollen in ~/.claude/agents gefunden."
   },
   "model": {
-    "title": "Modell",
-    "auto": "Automatisch (wie in Rolle/System)",
-    "forAll": "für alle:",
-    "allTo": "alle auf"
+    "title": "Modell"
   },
   "session": {
     "start": "Session starten",
     "cancel": "Abbrechen",
-    "clear": "Leeren",
     "interrupted": "Session unterbrochen — der Serverprozess ist gegangen. Die Unterhaltung liegt noch bei Claude.",
     "resume": "fortsetzen",
     "autoPermissions": "Auto-Permissions",
@@ -50,15 +40,12 @@
     "cache": "Cache",
     "requests": "Anfragen",
     "duration": "Dauer",
-    "tooltip": "Ausgabe und frische Eingabe sind neu verarbeitet. Cache-Schreiben kostet extra, Cache-Lesen ist billig und wird bei jeder Anfrage erneut gemeldet."
+    "tooltip": "Cache-Schreiben (↑) kostet extra, Cache-Lesen (↓) ist billig und zeigt die Kontextgröße. Sichtbar sind nur neu verarbeitete Tokens."
   },
   "feed": {
     "title": "Live-Feed",
     "waiting": "wartet",
-    "filterAll": "alles",
-    "filterTools": "werkzeuge",
-    "filterRoles": "rollen",
-    "noItems": "— nichts in dieser Auswahl —",
+    "noItems": "— noch nichts —",
     "of": "von"
   },
   "messages": {
@@ -126,40 +113,16 @@
     "securityChecked": "geprüft",
     "securityOpen": "offen"
   },
-  "hooks": {
-    "title": "Hooks & Automation",
-    "subtitle": "Trigger, Nachtläufe und Zustellung",
-    "gateActive": "scharf",
-    "notInstalled": "nicht installiert",
-    "gateDescription": "Stop-Hook: startet nach jeder Session mit uncommitteten Änderungen an sicherheitsrelevanten Dateien.",
-    "lastRuns": "Letzte Auslösungen",
-    "notYetTriggered": "Noch nicht ausgelöst.",
-    "connected": "verbunden",
-    "offline": "offline",
-    "claudeOnServer": "Claude auf dem Server",
-    "otherCronLines": "Fremde Cron-Zeilen",
-    "unchanged": "(bleiben unberührt)",
-    "saveFailed": "Speichern fehlgeschlagen",
-    "cronFailed": "Crontab konnte nicht geschrieben werden",
-    "saved": "settings.json geschrieben (Sicherung daneben abgelegt).",
-    "cronUpdated": "Crontab auf vps02 aktualisiert.",
-    "nightRunsTitle": "Nachtläufe · vps02",
-    "lastRun": "Letzter Lauf",
-    "remove": "Entfernen",
-    "addNightRun": "Nachtlauf",
-    "writeToVps": "Auf vps02 schreiben",
-    "settingsJson": "hooks in settings.json",
-    "edit": "Bearbeiten",
-    "cancel": "Abbrechen",
-    "save": "Speichern",
-    "loading": "lade …",
-    "hooksActive": "{count, plural, one {# Hook aktiv} other {# Hooks aktiv}}"
-  },
   "topbar": {
     "waitingSince": "wartet auf Eingabe · seit {time}",
     "sessionStatus": "Session {status}",
     "noSession": "keine Session",
     "projects": "{count} Projekte"
+  },
+  "theme": {
+    "system": "Design: wie das System — klicken für hell",
+    "light": "Design: hell — klicken für dunkel",
+    "dark": "Design: dunkel — klicken für Systemeinstellung"
   },
   "layout": {
     "showSidebar": "Session-Spalte einblenden",
@@ -177,20 +140,13 @@
     "modelNote": "· wirkt erst über Übernehmen",
     "rolesTitle": "Rollen · ~/.claude/agents",
     "roleLocked": "„{role}“ ist dieser Session mitgegeben und lässt sich nicht mehr entfernen",
-    "roleAdd": "„{role}“ jetzt dazuschalten — die Session bekommt einen Auftrag dafür",
-    "addTag": "+ dazu",
-    "lockNote": "Rollen lassen sich dazuschalten, aber nicht mehr herausnehmen. Modell und Auto-Permissions stehen im Prozessaufruf — sie wechseln über Übernehmen, die Unterhaltung läuft dabei per --resume weiter. Der Projektordner ist fest.",
+    "lockNote": "Die Rollen stehen für diese Session fest. Modell und Auto-Permissions stehen im Prozessaufruf — sie wechseln über Übernehmen, die Unterhaltung läuft dabei per --resume weiter. Der Projektordner ist fest.",
     "apply": "Übernehmen · Session fortsetzen",
     "messagesHint": "Weitere Anweisungen gehen unten rechts an die laufende Session.",
     "promptLabel": "Prompt",
     "promptPlaceholder": "Was soll die Session tun?",
     "cliMismatch": "Das ist der laufende Aufruf. Die Auswahl oben weicht davon ab.",
     "stop": "Session beenden",
-    "automation": "Automation",
-    "nightRun": "Nachtlauf · vps02",
-    "manage": "verwalten",
-    "hookCard": "Hook · security-reviewer",
-    "hookCardNote": "Startet automatisch nach Sessions mit Code-Änderungen",
     "promptHint": "Vollständige Spezifikation upfront — alle Teil-Anforderungen gleich hier nennen. Tröpfchenweises Nachschärfen kostet Qualität und Runden."
   },
   "console": {

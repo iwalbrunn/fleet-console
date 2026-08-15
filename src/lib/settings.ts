@@ -2,7 +2,7 @@ import { execFile as execFileCb } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { AGENTS_DIR, CLAUDE_DIR, FLEET_DIR, PROJECT_ROOTS, SETTINGS_FILE, shortProjectName } from './config'
+import { AGENTS_DIR, PROJECT_ROOTS, shortProjectName } from './config'
 
 export interface Role {
   name: string
@@ -166,113 +166,4 @@ export async function listProjects(): Promise<ProjectEntry[]> {
       if (Boolean(a.repo) !== Boolean(b.repo)) return a.repo ? -1 : 1
       return a.label.localeCompare(b.label)
     })
-}
-
-// ---------------------------------------------------------------- Hooks
-
-export interface HookEntry {
-  event: string
-  matcher: string
-  type: string
-  command: string
-  timeout?: number
-  statusMessage?: string
-}
-
-export interface HooksView {
-  file: string
-  raw: string
-  entries: HookEntry[]
-  gateInstalled: boolean
-  gateScript: string | null
-  gateRuns: { date: string; text: string; result: string }[]
-}
-
-export const GATE_LOG = path.join(FLEET_DIR, 'gate.log')
-
-async function readSettings(): Promise<any> {
-  try {
-    return JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8'))
-  } catch {
-    return {}
-  }
-}
-
-export async function readHooks(): Promise<HooksView> {
-  const settings = await readSettings()
-  const hooks = settings.hooks ?? {}
-  const entries: HookEntry[] = []
-
-  for (const [event, groups] of Object.entries(hooks)) {
-    if (!Array.isArray(groups)) continue
-    for (const group of groups as any[]) {
-      for (const h of group.hooks ?? []) {
-        entries.push({
-          event,
-          matcher: group.matcher ?? '',
-          type: h.type ?? 'command',
-          command: h.command ?? h.prompt ?? '',
-          timeout: h.timeout,
-          statusMessage: h.statusMessage,
-        })
-      }
-    }
-  }
-
-  const gate = entries.find((e) => e.command.includes('security-review-gate'))
-
-  let gateRuns: HooksView['gateRuns'] = []
-  try {
-    const log = await fs.readFile(GATE_LOG, 'utf8')
-    gateRuns = log
-      .split('\n')
-      .filter(Boolean)
-      .slice(-12)
-      .reverse()
-      .map((line) => {
-        // Format: ISO<TAB>projekt<TAB>anzahl<TAB>ergebnis
-        const [date, project, count, result] = line.split('\t')
-        return {
-          date: (date ?? '').slice(5, 16).replace('T', ' '),
-          text: `${(project ?? '?').split('/').slice(-2).join('/')} · ${count ?? '?'} Datei(en)`,
-          result: result ?? 'ausgelöst',
-        }
-      })
-  } catch {
-    /* noch nie ausgelöst */
-  }
-
-  return {
-    file: SETTINGS_FILE,
-    raw: JSON.stringify({ hooks }, null, 2),
-    entries,
-    gateInstalled: Boolean(gate),
-    gateScript: gate?.command ?? null,
-    gateRuns,
-  }
-}
-
-/** Schreibt ausschließlich den hooks-Block zurück, alles andere bleibt unberührt. */
-export async function writeHooks(hooksJson: string): Promise<{ ok: true } | { ok: false; error: string }> {
-  let parsed: any
-  try {
-    parsed = JSON.parse(hooksJson)
-  } catch (err) {
-    return { ok: false, error: `Kein gültiges JSON: ${String(err)}` }
-  }
-  const hooks = parsed.hooks ?? parsed
-  if (typeof hooks !== 'object' || Array.isArray(hooks)) {
-    return { ok: false, error: 'Erwartet ein Objekt mit Hook-Events als Schlüssel.' }
-  }
-
-  const settings = await readSettings()
-  const backup = path.join(CLAUDE_DIR, `settings.json.bak-fleet-${Date.now()}`)
-  try {
-    await fs.copyFile(SETTINGS_FILE, backup)
-  } catch {
-    /* noch keine settings.json — dann gibt es nichts zu sichern */
-  }
-  settings.hooks = hooks
-  await fs.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n', 'utf8')
-  return { ok: true }
 }

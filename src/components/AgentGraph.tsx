@@ -25,22 +25,53 @@ interface Teilchen {
 }
 
 /** Farbe je Zustand — Zeitgrenze bekommt einen eigenen Ton, sie ist kein
- *  Fehler der Rolle. */
+ *  Fehler der Rolle. Tokens statt Hexwerte, damit das Theme mitkommt. */
 function statusFarbe(status: GraphNode['status']): string {
-  if (status === 'running') return '#b5abfc'
-  if (status === 'done') return '#d2cefd'
-  if (status === 'error') return '#e08c92'
-  if (status === 'timeout') return '#e2c79b'
-  return '#75798c'
+  if (status === 'running') return 'var(--color-accent-400)'
+  if (status === 'done') return 'var(--color-accent-300)'
+  if (status === 'error') return 'var(--color-error-soft)'
+  if (status === 'timeout') return 'var(--color-warn-text)'
+  return 'var(--color-neutral-600)'
 }
 
 function punktFarbe(status: GraphNode['status']): string {
-  if (status === 'running') return '#9184d9'
-  if (status === 'done') return '#d2cefd'
-  if (status === 'error') return '#b4545a'
-  if (status === 'timeout') return '#c8a06a'
-  return '#595d6c'
+  if (status === 'running') return 'var(--color-accent)'
+  if (status === 'done') return 'var(--color-accent-300)'
+  if (status === 'error') return 'var(--color-error)'
+  if (status === 'timeout') return 'var(--color-warn)'
+  return 'var(--color-neutral-700)'
 }
+
+/** Der Canvas kennt keine CSS-Variablen — die Tokens werden einmal je
+ *  Theme-Wechsel ausgelesen und als RGB-Tripel gehalten, weil die Teilchen
+ *  ihre Deckkraft zur Laufzeit variieren. */
+interface CanvasFarben {
+  accent: [number, number, number]
+  text: [number, number, number]
+  teilchen: [number, number, number]
+  teilchenRueck: [number, number, number]
+}
+
+function hexZuRgb(hex: string, fallback: [number, number, number]): [number, number, number] {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return fallback
+  const n = parseInt(m[1], 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+function leseCanvasFarben(): CanvasFarben {
+  const s = getComputedStyle(document.documentElement)
+  const wert = (name: string) => s.getPropertyValue(name)
+  return {
+    accent: hexZuRgb(wert('--color-accent'), [145, 132, 217]),
+    text: hexZuRgb(wert('--color-text'), [233, 233, 237]),
+    teilchen: hexZuRgb(wert('--color-accent-300'), [213, 206, 253]),
+    teilchenRueck: hexZuRgb(wert('--color-accent-200'), [226, 220, 255]),
+  }
+}
+
+const rgba = (rgb: [number, number, number], alpha: number) =>
+  `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`
 
 export default function AgentGraph({
   nodes,
@@ -86,6 +117,18 @@ export default function AgentGraph({
     let raf = 0
     const stroeme = new Map<string, { t: number; v: number }[]>()
     const DICHTE = 12
+
+    // Theme-Wechsel: Tokens neu lesen und die ruhende Zeichnung aufwecken,
+    // sonst behielte der Canvas die Farben des alten Themes.
+    let farben = leseCanvasFarben()
+    const themeWechsel = () => {
+      farben = leseCanvasFarben()
+      signatur = ''
+    }
+    const beobachter = new MutationObserver(themeWechsel)
+    beobachter.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    const mq = window.matchMedia('(prefers-color-scheme: light)')
+    mq.addEventListener('change', themeWechsel)
 
     /** Neue Knoten kommen auf einem Bogen rechts vom Orchestrator dazu,
      *  damit die Simulation sie nicht erst auseinandertreiben muss. */
@@ -213,8 +256,8 @@ export default function AgentGraph({
         const p = sim.current.get(n.id)
         if (!p) continue
         const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 64)
-        g.addColorStop(0, 'rgba(145,132,217,.14)')
-        g.addColorStop(1, 'rgba(145,132,217,0)')
+        g.addColorStop(0, rgba(farben.accent, 0.14))
+        g.addColorStop(1, rgba(farben.accent, 0))
         ctx.fillStyle = g
         ctx.beginPath()
         ctx.arc(p.x, p.y, 64, 0, Math.PI * 2)
@@ -253,10 +296,10 @@ export default function AgentGraph({
         ctx.moveTo(A.x, A.y)
         ctx.bezierCurveTo(A.x + dx, A.y, B.x - dx, B.y, B.x, B.y)
         ctx.strokeStyle = aktiv
-          ? 'rgba(145,132,217,0.35)'
+          ? rgba(farben.accent, 0.35)
           : fertig
-            ? 'rgba(145,132,217,0.14)'
-            : 'rgba(233,233,237,0.06)'
+            ? rgba(farben.accent, 0.14)
+            : rgba(farben.text, 0.06)
         ctx.lineWidth = aktiv ? 1.2 : 1
         ctx.stroke()
 
@@ -276,7 +319,7 @@ export default function AgentGraph({
         }
 
         ctx.save()
-        ctx.shadowColor = '#9184d9'
+        ctx.shadowColor = rgba(farben.accent, 1)
         ctx.shadowBlur = 9
         for (const teilchen of strom) {
           teilchen.t += teilchen.v * (rueck ? 1.8 : 1)
@@ -285,9 +328,7 @@ export default function AgentGraph({
           ctx.beginPath()
           ctx.arc(pt.x, pt.y, 1.1 + teilchen.v * 260, 0, Math.PI * 2)
           const helligkeit = 0.35 + 0.6 * Math.sin(Math.PI * teilchen.t)
-          ctx.fillStyle = rueck
-            ? `rgba(226,220,255,${helligkeit})`
-            : `rgba(213,206,253,${helligkeit})`
+          ctx.fillStyle = rgba(rueck ? farben.teilchenRueck : farben.teilchen, helligkeit)
           ctx.fill()
         }
         ctx.restore()
@@ -295,7 +336,11 @@ export default function AgentGraph({
     }
 
     raf = requestAnimationFrame(zeichne)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      beobachter.disconnect()
+      mq.removeEventListener('change', themeWechsel)
+    }
   }, [])
 
   const orchestrator = nodes.find((n) => n.id === 'orchestrator')
@@ -312,14 +357,14 @@ export default function AgentGraph({
     padding: gross ? '7px 15px 7px 8px' : '7px 13px',
     borderRadius: 99,
     cursor: 'pointer',
-    background: 'rgba(35,37,50,.94)',
+    background: 'var(--color-overlay)',
     backdropFilter: 'blur(3px)',
     border: gewaehlt
-      ? '1px solid #d2cefd'
+      ? '1px solid var(--color-accent-300)'
       : status === 'running'
-        ? '1px solid rgba(145,132,217,.7)'
-        : `1px solid ${status === 'error' ? '#b4545a' : status === 'timeout' ? '#c8a06a' : 'var(--color-divider)'}`,
-    boxShadow: status === 'running' ? '0 0 26px rgba(145,132,217,.3)' : 'var(--shadow-sm)',
+        ? '1px solid color-mix(in srgb, var(--color-accent) 70%, transparent)'
+        : `1px solid ${status === 'error' ? 'var(--color-error)' : status === 'timeout' ? 'var(--color-warn)' : 'var(--color-divider)'}`,
+    boxShadow: status === 'running' ? '0 0 26px color-mix(in srgb, var(--color-accent) 30%, transparent)' : 'var(--shadow-sm)',
     opacity: status === 'idle' ? 0.75 : 1,
     transition: 'border-color .4s, box-shadow .4s, opacity .4s',
     color: 'inherit',
@@ -334,7 +379,7 @@ export default function AgentGraph({
     borderRadius: '50%',
     marginLeft: 'auto',
     background: punktFarbe(status),
-    boxShadow: status === 'running' ? '0 0 10px rgba(145,132,217,.9)' : 'none',
+    boxShadow: status === 'running' ? '0 0 10px color-mix(in srgb, var(--color-accent) 90%, transparent)' : 'none',
     animation: status === 'running' ? 'nfPulse 1.6s infinite' : 'none',
   })
 
@@ -369,8 +414,8 @@ export default function AgentGraph({
                 borderRadius: '50%',
                 display: 'grid',
                 placeItems: 'center',
-                background: 'rgba(145,132,217,.14)',
-                border: '1px solid rgba(145,132,217,.5)',
+                background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--color-accent) 50%, transparent)',
                 flex: 'none',
               }}
             >

@@ -180,7 +180,7 @@ export default function RunsView() {
               </span>
               <span
                 style={{
-                  color: run.status === 'abgeschlossen' ? 'var(--color-neutral-300)' : '#c8a06a',
+                  color: run.status === 'abgeschlossen' ? 'var(--color-neutral-300)' : 'var(--color-warn)',
                   fontSize: 11.5,
                 }}
               >

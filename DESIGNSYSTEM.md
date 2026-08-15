@@ -13,6 +13,22 @@ Nocturne is a quiet, compact dark interface: a near-neutral blue-grey ground, In
 
 Left-aligned, asymmetric layouts. Flush-left headings; content hugs the left edge with whitespace on the right. Buttons are outlined (1px accent border on transparent), not solid-filled. In decks, section dividers lift to a saturated deep-indigo ground (the `--color-section` tokens — saturation as presence, at slide scale), and the landing template's one full-bleed stat band makes the same presence move at page scale; everywhere else grounds stay desaturated, with soft gradient depth rather than flat fills. Wrap hero and inline images in the `.lighten` class — `mix-blend-mode: lighten` blends them into whatever the page paints behind them: anything darker than the backdrop falls away, so on a dark page a black photo background disappears entirely. Prefer photographs shot on dark or black backgrounds.
 
+## Light mode
+
+Nocturne stays a dark system at heart, but the console rebinds every token
+for a light ground: `nocturne.css` carries a second palette under
+`:root[data-theme='light']` and, for the system preference, under
+`@media (prefers-color-scheme: light)`. The ramps flip end-for-end (the dark
+steps become the text steps), the accent drops to a step that carries
+contrast on white, and the semantic state tokens (`--color-warn`,
+`--color-error`, `--color-ok`, `--color-code-bg`, `--color-overlay`, …) are
+rebound alongside. Components must therefore never hard-code a color — the
+tokens are the only place where a value may live. The one JS consumer is the
+agent-graph canvas, which reads the tokens via `getComputedStyle` once per
+theme change. The choice persists as `localStorage['fleet.theme']`
+(`light`/`dark`; absent = follow the system) and is applied before first
+paint by an inline script in the layout head.
+
 ## Color
 
 A dark ground (`--color-bg` #161826) with `--color-text` #e9e9ed and a single accent #9184d9 — a blurple in the product's own Pro-accent hue, at the chroma that hue carries in the app, so the accent reads as an accent against the desaturated ramps (this is a mono scheme: no second accent was chosen — the `--color-accent-2-*` variables carry a machine-derived stand-in kept only so both sets resolve; treat them as one role). Each role carries a 100–900 tonal ramp (`--color-neutral-100` … `--color-accent-2-900`) generated in OKLCH on a shared perceptual lightness scale, so the same step of any ramp has the same visual weight. On this dark ground use the dark steps (700–900) for tinted fills, hovers and subtle borders, 500 as the role's base, and the light steps (100–300) for text on those tints and for pressed states; prefer ramp steps over ad-hoc `color-mix()`. For elevation use `--shadow-sm/md/lg` (already tuned to the ground) rather than ad-hoc box-shadows.

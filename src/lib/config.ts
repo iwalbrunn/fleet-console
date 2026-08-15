@@ -26,11 +26,6 @@ export const PROJECT_ROOTS = (process.env.FLEET_PROJECT_ROOTS ?? path.join(HOME,
   .map((p) => p.replace(/^~/, HOME))
   .filter(Boolean)
 
-/** Ziel für Nachtläufe. Kein Standardwert im Code — der Host gehört in die
- *  `.env.local`, nicht ins Repo. Ohne Angabe bleibt der Bereich aus. */
-export const VPS_HOST = process.env.FLEET_VPS_HOST ?? ''
-export const VPS_ENABLED = process.env.FLEET_VPS_ENABLED !== 'false' && Boolean(VPS_HOST)
-
 /** Der Pfad zur Claude-CLI (falls sie nicht im PATH des Servers liegt). */
 export const CLAUDE_BIN = process.env.FLEET_CLAUDE_BIN ?? 'claude'
 

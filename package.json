@@ -2,7 +2,7 @@
   "name": "fleet-console",
   "version": "0.1.0",
   "private": true,
-  "description": "A local agent console for Claude Code — start sessions and watch them live, run roles as their own sessions, keep history and hooks in view",
+  "description": "A local agent console for Claude Code — start sessions and watch them live, run roles as their own sessions, keep history in view",
   "license": "MIT",
   "author": "Ivan Walbrunn",
   "repository": {

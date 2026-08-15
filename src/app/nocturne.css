@@ -78,6 +78,140 @@
   --shadow-sm: 0 0 0 1px #3f424d;
   --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0,0,0,0.55);
   --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0,0,0,0.65);
+
+  /* Semantic state colors — one name per role instead of the same literals
+     scattered through the app. The light theme rebinds all of them. */
+  --color-warn: #c8a06a;        /* timeout / waiting amber */
+  --color-warn-text: #e2c79b;   /* readable amber text on the warn tint */
+  --color-error: #b4545a;
+  --color-error-text: #f0c8ca;  /* readable red text on the error tint */
+  --color-error-soft: #e08c92;  /* error as a line/label, not a fill */
+  --color-ok: #6f7f6a;
+  --color-code-bg: #101120;     /* code blocks and the live feed ground */
+  --color-overlay: rgba(35,37,50,.94);  /* floating panels over the stage */
+  --color-stage-glow: rgba(38,42,96,.35);
+  --color-backdrop: rgba(10,11,18,.55);
+
+  color-scheme: dark;
+}
+
+/* ── Light theme ──────────────────────────────────────────────────────────
+   Same token names, rebound: the ramps flip (the dark end becomes the text
+   end), the accent drops to a step that carries contrast on a light ground.
+   Two selectors, one palette: the explicit choice (data-theme) and the
+   system preference when no choice was made. Keep both blocks identical. */
+:root[data-theme='light'] {
+  --color-bg: #f2f3f8;
+  --color-surface: #ffffff;
+  --color-text: #23252f;
+  --color-accent: #6f61bd;
+  --color-accent-2: #7a71c0;
+  --color-divider: color-mix(in srgb, #23252f 16%, transparent);
+
+  --color-neutral-100: #23252b;
+  --color-neutral-200: #383b45;
+  --color-neutral-300: #4d505d;
+  --color-neutral-400: #636779;
+  --color-neutral-500: #7d8194;
+  --color-neutral-600: #999db0;
+  --color-neutral-700: #b8bccb;
+  --color-neutral-800: #d6d9e4;
+  --color-neutral-900: #eceef5;
+
+  --color-accent-100: #2b2741;
+  --color-accent-200: #423a6a;
+  --color-accent-300: #5d5294;
+  --color-accent-400: #796cbf;
+  --color-accent-500: #968ae0;
+  --color-accent-600: #b5abfc;
+  --color-accent-700: #d2cefd;
+  --color-accent-800: #e7e5fe;
+  --color-accent-900: #f5f4ff;
+
+  --color-accent-2-100: #2b293a;
+  --color-accent-2-200: #423e5d;
+  --color-accent-2-300: #5c5783;
+  --color-accent-2-400: #7972a9;
+  --color-accent-2-500: #9690c9;
+  --color-accent-2-600: #b5afe8;
+  --color-accent-2-700: #d2cefd;
+  --color-accent-2-800: #e7e5fe;
+  --color-accent-2-900: #f5f4ff;
+
+  --shadow-sm: 0 0 0 1px #d8dae4;
+  --shadow-md: 0 0 0 1px #c8cbd8, 0 6px 18px rgba(35,37,60,0.12);
+  --shadow-lg: 0 0 0 1px #b2b6ca, 0 16px 40px rgba(35,37,60,0.18);
+
+  --color-warn: #a87b3e;
+  --color-warn-text: #7a5a2a;
+  --color-error: #b4545a;
+  --color-error-text: #8c3a40;
+  --color-error-soft: #c06067;
+  --color-ok: #5d7a56;
+  --color-code-bg: #eef0f6;
+  --color-overlay: rgba(255,255,255,.95);
+  --color-stage-glow: rgba(120,128,200,.14);
+  --color-backdrop: rgba(35,37,50,.35);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --color-bg: #f2f3f8;
+    --color-surface: #ffffff;
+    --color-text: #23252f;
+    --color-accent: #6f61bd;
+    --color-accent-2: #7a71c0;
+    --color-divider: color-mix(in srgb, #23252f 16%, transparent);
+
+    --color-neutral-100: #23252b;
+    --color-neutral-200: #383b45;
+    --color-neutral-300: #4d505d;
+    --color-neutral-400: #636779;
+    --color-neutral-500: #7d8194;
+    --color-neutral-600: #999db0;
+    --color-neutral-700: #b8bccb;
+    --color-neutral-800: #d6d9e4;
+    --color-neutral-900: #eceef5;
+
+    --color-accent-100: #2b2741;
+    --color-accent-200: #423a6a;
+    --color-accent-300: #5d5294;
+    --color-accent-400: #796cbf;
+    --color-accent-500: #968ae0;
+    --color-accent-600: #b5abfc;
+    --color-accent-700: #d2cefd;
+    --color-accent-800: #e7e5fe;
+    --color-accent-900: #f5f4ff;
+
+    --color-accent-2-100: #2b293a;
+    --color-accent-2-200: #423e5d;
+    --color-accent-2-300: #5c5783;
+    --color-accent-2-400: #7972a9;
+    --color-accent-2-500: #9690c9;
+    --color-accent-2-600: #b5afe8;
+    --color-accent-2-700: #d2cefd;
+    --color-accent-2-800: #e7e5fe;
+    --color-accent-2-900: #f5f4ff;
+
+    --shadow-sm: 0 0 0 1px #d8dae4;
+    --shadow-md: 0 0 0 1px #c8cbd8, 0 6px 18px rgba(35,37,60,0.12);
+    --shadow-lg: 0 0 0 1px #b2b6ca, 0 16px 40px rgba(35,37,60,0.18);
+
+    --color-warn: #a87b3e;
+    --color-warn-text: #7a5a2a;
+    --color-error: #b4545a;
+    --color-error-text: #8c3a40;
+    --color-error-soft: #c06067;
+    --color-ok: #5d7a56;
+    --color-code-bg: #eef0f6;
+    --color-overlay: rgba(255,255,255,.95);
+    --color-stage-glow: rgba(120,128,200,.14);
+    --color-backdrop: rgba(35,37,50,.35);
+
+    color-scheme: light;
+  }
 }
 
 body {

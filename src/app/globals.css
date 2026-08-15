@@ -21,10 +21,10 @@ a:hover {
 @keyframes nfPulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(145, 132, 217, 0.55);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 55%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(145, 132, 217, 0);
+    box-shadow: 0 0 0 6px transparent;
   }
 }
 
@@ -44,7 +44,7 @@ a:hover {
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #3f424d;
+  background: var(--color-neutral-800);
   border-radius: 4px;
 }
 *::-webkit-scrollbar-track {
@@ -69,8 +69,8 @@ a:hover {
   background: linear-gradient(
       to right,
       transparent,
-      rgba(233, 233, 237, 0.14) 48px,
-      rgba(233, 233, 237, 0.14) calc(100% - 48px),
+      color-mix(in srgb, var(--color-text) 14%, transparent) 48px,
+      color-mix(in srgb, var(--color-text) 14%, transparent) calc(100% - 48px),
       transparent
     )
     no-repeat bottom / 100% 1px;
@@ -82,7 +82,7 @@ a:hover {
   border: 1px solid var(--color-accent);
   border-radius: 4px;
   transform: rotate(45deg);
-  box-shadow: 0 0 12px rgba(145, 132, 217, 0.5);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--color-accent) 50%, transparent);
 }
 
 .navbtn {
@@ -97,19 +97,19 @@ a:hover {
 }
 .navbtn:hover {
   color: var(--color-text);
-  background: rgba(233, 233, 237, 0.05);
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
 .navbtn[data-active='true'] {
   color: var(--color-text);
   border-color: var(--color-divider);
-  background: rgba(145, 132, 217, 0.1);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
 }
 
 .pill {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--color-neutral-400);
   border: 1px solid var(--color-divider);
   border-radius: 99px;
@@ -126,15 +126,15 @@ a:hover {
   background: linear-gradient(
       to bottom,
       transparent,
-      rgba(233, 233, 237, 0.12) 48px,
-      rgba(233, 233, 237, 0.12) calc(100% - 48px),
+      color-mix(in srgb, var(--color-text) 12%, transparent) 48px,
+      color-mix(in srgb, var(--color-text) 12%, transparent) calc(100% - 48px),
       transparent
     )
     no-repeat right / 1px 100%;
 }
 
 .kicker {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--color-neutral-500);
@@ -145,12 +145,12 @@ a:hover {
 }
 
 .codebox {
-  background: #101120;
+  background: var(--color-code-bg);
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
   padding: 10px 12px;
   font-family: ui-monospace, Menlo, monospace;
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1.6;
   color: var(--color-accent-300);
   word-break: break-all;
@@ -182,7 +182,7 @@ a:hover {
   width: 100%;
 }
 .rolerow:hover {
-  background: rgba(233, 233, 237, 0.05);
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
 
 .checkbox {
@@ -196,7 +196,7 @@ a:hover {
 }
 .checkbox[data-on='true'] {
   border-color: var(--color-accent);
-  background: rgba(145, 132, 217, 0.2);
+  background: color-mix(in srgb, var(--color-accent) 20%, transparent);
 }
 
 .stage {
@@ -209,8 +209,8 @@ a:hover {
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background-image: radial-gradient(ellipse 60% 50% at 30% 45%, rgba(38, 42, 96, 0.35), transparent),
-    radial-gradient(rgba(233, 233, 237, 0.045) 1px, transparent 1px);
+  background-image: radial-gradient(ellipse 60% 50% at 30% 45%, var(--color-stage-glow), transparent),
+    radial-gradient(color-mix(in srgb, var(--color-text) 4.5%, transparent) 1px, transparent 1px);
   background-size: 100% 100%, 24px 24px;
 }
 
@@ -220,7 +220,7 @@ a:hover {
   gap: 6px;
   padding: 10px 11px;
   border-radius: var(--radius-md);
-  background: rgba(35, 37, 50, 0.92);
+  background: var(--color-overlay);
   border: 1px solid var(--color-divider);
   cursor: pointer;
   text-align: left;
@@ -229,18 +229,18 @@ a:hover {
   width: 100%;
 }
 .nodecard[data-status='running'] {
-  border-color: rgba(145, 132, 217, 0.55);
-  box-shadow: 0 0 18px rgba(145, 132, 217, 0.18);
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 .nodecard[data-status='done'] {
-  border-color: rgba(145, 132, 217, 0.25);
+  border-color: color-mix(in srgb, var(--color-accent) 25%, transparent);
 }
 .nodecard[data-status='error'] {
-  border-color: #b4545a;
+  border-color: var(--color-error);
 }
 /* Zeitgrenze ist kein Fehler der Rolle — eigene, ruhigere Farbe. */
 .nodecard[data-status='timeout'] {
-  border-color: #c8a06a;
+  border-color: var(--color-warn);
 }
 
 .dot {
@@ -255,23 +255,23 @@ a:hover {
   animation: nfPulse 1.6s infinite;
 }
 .dot[data-status='done'] {
-  background: #6f7f6a;
+  background: var(--color-ok);
 }
 .dot[data-status='error'] {
-  background: #b4545a;
+  background: var(--color-error);
 }
 .dot[data-status='timeout'] {
-  background: #c8a06a;
+  background: var(--color-warn);
 }
 
 .feed {
   flex: 1;
   overflow-y: auto;
   font-family: ui-monospace, Menlo, monospace;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.75;
   padding: 10px 12px;
-  background: #101120;
+  background: var(--color-code-bg);
   border: 1px solid var(--color-divider);
   border-radius: var(--radius-md);
   min-height: 0;
@@ -283,7 +283,7 @@ a:hover {
   align-items: baseline;
 }
 .feedtime {
-  color: #4a4e63;
+  color: var(--color-neutral-600);
   flex: none;
 }
 
@@ -294,7 +294,7 @@ a:hover {
   padding: 9px 12px;
   font-size: 12.5px;
   align-items: center;
-  border-bottom: 1px solid rgba(233, 233, 237, 0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent);
   cursor: pointer;
   background: transparent;
   border-left: none;
@@ -306,10 +306,10 @@ a:hover {
   width: 100%;
 }
 .runrow:hover {
-  background: rgba(233, 233, 237, 0.04);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
 }
 .runrow[data-selected='true'] {
-  background: rgba(145, 132, 217, 0.1);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
 }
 
 .split {
@@ -327,9 +327,9 @@ textarea.input {
 }
 
 .banner {
-  border: 1px solid #b4545a;
-  background: rgba(180, 84, 90, 0.12);
-  color: #f0c8ca;
+  border: 1px solid var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error-text);
   border-radius: var(--radius-md);
   padding: 8px 11px;
   font-size: 12px;
@@ -346,7 +346,7 @@ textarea.input {
 }
 .resizer:hover,
 .resizer:active {
-  background: linear-gradient(to right, transparent, rgba(145, 132, 217, 0.5), transparent);
+  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--color-accent) 50%, transparent), transparent);
 }
 
 /* — wiederkehrende Bausteine, damit nicht jede Stelle eigene Werte erfindet — */
@@ -391,19 +391,19 @@ textarea.input {
   color: var(--color-neutral-500);
   border-radius: 99px;
   padding: 2px 9px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
 }
 .chip:hover {
   color: var(--color-text);
-  background: rgba(233, 233, 237, 0.05);
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
 .chip[data-on='true'] {
   color: var(--color-text);
-  border-color: rgba(145, 132, 217, 0.55);
-  background: rgba(145, 132, 217, 0.12);
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 /* Leerzustand: eine Fläche, die sagt, was zu tun ist */
@@ -424,7 +424,7 @@ textarea.input {
   margin-top: 6px;
 }
 .feedagent {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-neutral-600);
@@ -465,7 +465,7 @@ textarea.input {
 .nodebar {
   height: 3px;
   border-radius: 2px;
-  background: rgba(233, 233, 237, 0.08);
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
   overflow: hidden;
 }
 .nodebar > span {
@@ -479,20 +479,20 @@ textarea.input {
 .nodebar[data-status='done'] > span {
   width: 100%;
   animation: none;
-  background: rgba(145, 132, 217, 0.35);
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
 }
 .nodebar[data-status='error'] > span {
   width: 100%;
   animation: none;
-  background: #b4545a;
+  background: var(--color-error);
 }
 
 /* — Antwort-Ansicht: erst die Frage, dann der Text — */
 
 /* Was die Session jetzt vom Menschen braucht — immer oben, nie im Textberg. */
 .fragebox {
-  border: 1px solid #c8a06a;
-  background: rgba(200, 160, 106, 0.12);
+  border: 1px solid var(--color-warn);
+  background: color-mix(in srgb, var(--color-warn) 12%, transparent);
   border-radius: var(--radius-md);
   padding: 10px 12px;
   display: flex;
@@ -500,18 +500,18 @@ textarea.input {
   gap: 6px;
 }
 .fragebox .kicker {
-  color: #e2c79b;
+  color: var(--color-warn-text);
 }
 .fragezeile {
   font-size: 13px;
   line-height: 1.55;
-  color: #f0e2c8;
+  color: var(--color-warn-text);
   display: flex;
   gap: 8px;
 }
 .fragezeile::before {
   content: '→';
-  color: #c8a06a;
+  color: var(--color-warn);
   flex: none;
 }
 
@@ -533,7 +533,7 @@ textarea.input {
 }
 .antwortzeile:hover {
   color: var(--color-text);
-  background: rgba(233, 233, 237, 0.04);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
 }
 
 /* — Verläufe: Liste + Bericht stapeln sich, statt zu klemmen — */
@@ -569,7 +569,7 @@ textarea.input {
   bottom: 0;
   z-index: 40;
   width: min(340px, 88vw);
-  background: var(--color-surface, #1b1c28);
+  background: var(--color-surface);
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.55);
 }
 .drawer-links {
@@ -584,7 +584,7 @@ textarea.input {
   position: fixed;
   inset: 52px 0 0 0;
   z-index: 35;
-  background: rgba(10, 11, 18, 0.55);
+  background: var(--color-backdrop);
   border: none;
   cursor: pointer;
 }
@@ -611,4 +611,61 @@ textarea.input {
     overflow: hidden;
     text-overflow: ellipsis;
   }
+}
+
+/* Warnhinweis (wartet / ohne Rolle / unterbrochen) */
+.warnbox {
+  border: 1px solid var(--color-warn);
+  background: color-mix(in srgb, var(--color-warn) 10%, transparent);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--color-warn-text);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Schalterzeile (Auto-Permissions, Worktree) */
+.switchrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
+.switch {
+  width: 34px;
+  height: 19px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+  border: 1px solid var(--color-divider);
+  position: relative;
+  flex: none;
+}
+.switch[data-on='true'] {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  border-color: var(--color-accent);
+}
+.switch > span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--color-neutral-600);
+  transition: left 0.15s ease;
+}
+.switch[data-on='true'] > span {
+  left: 16px;
+  background: var(--color-accent);
 }

@@ -2,7 +2,6 @@
   "navigation": {
     "console": "Console",
     "history": "History",
-    "hooks": "Hooks",
     "toggleLanguage": "Toggle Language",
     "subtitle": "Local agent console"
   },
@@ -11,26 +10,17 @@
     "description": "Local agent console for Claude Code"
   },
   "project": {
-    "title": "Project",
-    "directory": "Project Directory",
-    "none": "— none —",
-    "loadState": "Working state as context"
+    "title": "Project"
   },
   "roles": {
-    "title": "Roles",
-    "noRolesFound": "No roles found in ~/.claude/agents.",
-    "none": "— none —"
+    "noRolesFound": "No roles found in ~/.claude/agents."
   },
   "model": {
-    "title": "Model",
-    "auto": "Auto (from role/system)",
-    "forAll": "for all:",
-    "allTo": "all to"
+    "title": "Model"
   },
   "session": {
     "start": "Start Session",
     "cancel": "Cancel",
-    "clear": "Clear",
     "interrupted": "Session interrupted — the server process has exited. The conversation is still with Claude.",
     "resume": "resume",
     "autoPermissions": "Auto-Permissions",
@@ -50,15 +40,12 @@
     "cache": "Cache",
     "requests": "requests",
     "duration": "Duration",
-    "tooltip": "Output and fresh input are newly processed. Cache writes cost extra, cache reads are cheap and are reported again on every request."
+    "tooltip": "Cache writes (↑) cost extra, cache reads (↓) are cheap and show the context size. Only newly processed tokens are displayed."
   },
   "feed": {
     "title": "Live Feed",
     "waiting": "waiting",
-    "filterAll": "all",
-    "filterTools": "tools",
-    "filterRoles": "roles",
-    "noItems": "— nothing in this selection —",
+    "noItems": "— nothing yet —",
     "of": "of"
   },
   "messages": {
@@ -126,40 +113,16 @@
     "securityChecked": "checked",
     "securityOpen": "open"
   },
-  "hooks": {
-    "title": "Hooks & Automation",
-    "subtitle": "Triggers, night runs, and delivery",
-    "gateActive": "active",
-    "notInstalled": "not installed",
-    "gateDescription": "Stop hook: runs after every session with uncommitted changes to security-relevant files.",
-    "lastRuns": "Last Triggers",
-    "notYetTriggered": "Not yet triggered.",
-    "connected": "connected",
-    "offline": "offline",
-    "claudeOnServer": "Claude on Server",
-    "otherCronLines": "Other Cron Lines",
-    "unchanged": "(remain untouched)",
-    "saveFailed": "Save failed",
-    "cronFailed": "Could not write crontab",
-    "saved": "settings.json written (backup placed next to it).",
-    "cronUpdated": "Crontab updated on vps02.",
-    "nightRunsTitle": "Night runs · vps02",
-    "lastRun": "Last run",
-    "remove": "Remove",
-    "addNightRun": "Night run",
-    "writeToVps": "Write to vps02",
-    "settingsJson": "hooks in settings.json",
-    "edit": "Edit",
-    "cancel": "Cancel",
-    "save": "Save",
-    "loading": "loading …",
-    "hooksActive": "{count, plural, one {# hook active} other {# hooks active}}"
-  },
   "topbar": {
     "waitingSince": "waiting for input · since {time}",
     "sessionStatus": "Session {status}",
     "noSession": "no session",
     "projects": "{count} projects"
+  },
+  "theme": {
+    "system": "Theme: follow the system — click for light",
+    "light": "Theme: light — click for dark",
+    "dark": "Theme: dark — click for system setting"
   },
   "layout": {
     "showSidebar": "Show the session column",
@@ -177,20 +140,13 @@
     "modelNote": "· takes effect via Apply",
     "rolesTitle": "Roles · ~/.claude/agents",
     "roleLocked": "\"{role}\" was given to this session and can no longer be removed",
-    "roleAdd": "Add \"{role}\" now — the session gets a task for it",
-    "addTag": "+ add",
-    "lockNote": "Roles can be added but not removed. Model and auto-permissions live in the process invocation — they switch via Apply, the conversation continues through --resume. The project folder is fixed.",
+    "lockNote": "The roles are fixed for this session. Model and auto-permissions live in the process invocation — they switch via Apply, the conversation continues through --resume. The project folder is fixed.",
     "apply": "Apply · continue session",
     "messagesHint": "Further instructions go to the running session at the bottom right.",
     "promptLabel": "Prompt",
     "promptPlaceholder": "What should the session do?",
     "cliMismatch": "This is the running invocation. The selection above differs from it.",
     "stop": "End session",
-    "automation": "Automation",
-    "nightRun": "Night run · vps02",
-    "manage": "manage",
-    "hookCard": "Hook · security-reviewer",
-    "hookCardNote": "Runs automatically after sessions with code changes",
     "promptHint": "Full specification upfront — name every sub-requirement here. Drip-feeding details costs quality and rounds."
   },
   "console": {

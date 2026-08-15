@@ -28,7 +28,7 @@ function inline(text: string, key: string) {
           style={{
             fontFamily: 'ui-monospace, Menlo, monospace',
             fontSize: '0.92em',
-            background: 'rgba(233,233,237,.07)',
+            background: 'color-mix(in srgb, var(--color-text) 7%, transparent)',
             borderRadius: 4,
             padding: '1px 5px',
             color: 'var(--color-accent-300)',
@@ -72,7 +72,7 @@ function Markdown({ text }: { text: string }) {
           <pre
             key={`pre-${index}`}
             style={{
-              background: '#101120',
+              background: 'var(--color-code-bg)',
               border: '1px solid var(--color-divider)',
               borderRadius: 'var(--radius-sm)',
               padding: '10px 12px',

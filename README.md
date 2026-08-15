@@ -3,7 +3,7 @@
 ![Fleet Console — a local agent console for Claude Code](docs/header.webp)
 
 A local agent console for Claude Code: start sessions and watch them live,
-browse past runs, manage hooks and scheduled night runs.
+run roles as their own sessions, browse past runs.
 
 ![The console during a role run](docs/screenshots/konsole.webp)
 
@@ -15,7 +15,8 @@ exists.*
 Built from the design draft "Fleet Console for agent visualisation" in the
 **Nocturne** design system (`src/app/nocturne.css`, described in
 `DESIGNSYSTEM.md`). Colors, spacing and states come from its tokens — no
-hand-picked hex values.
+hand-picked hex values. The console follows the system's light/dark
+preference and has a manual toggle in the top bar.
 
 How it works internally is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 including the traps that showed up while building it.
@@ -40,8 +41,7 @@ including the traps that showed up while building it.
 - **macOS** for the double-click launcher (`scripts/install-app.sh` builds an
   `.app` bundle). Everything else works anywhere Next.js runs; start it with
   `scripts/start.sh` or `npm run dev`.
-- Optional: roles in `~/.claude/agents` for role runs, and an SSH host for
-  night runs.
+- Optional: roles in `~/.claude/agents` for role runs.
 
 ## Getting started
 
@@ -187,12 +187,6 @@ involved, files written. Results are cached by mtime.
 
 ![History](docs/screenshots/verlaeufe.webp)
 
-**Hooks** — shows the hooks from `~/.claude/settings.json`, the state of the
-security gate with its recent triggers, and manages the night runs on the
-server.
-
-![Hooks](docs/screenshots/hooks.webp)
-
 ## Project selection
 
 The list comes from the file system, not from GitHub — a session needs a
@@ -213,18 +207,6 @@ The console calls your local `claude` CLI and inherits its login — the Claude
 subscription. **No API key** is needed or read. Runs count against the same
 quota as your interactive work.
 
-## Night runs on a server
-
-`FLEET_VPS_HOST` must be reachable over SSH with a key and no password. The
-console manages **only** cron lines carrying the marker
-`# fleet-console:<name>` — every other line of the crontab is read, counted and
-written back unchanged. Schedule and name are validated before writing.
-
-For night runs, `claude` must be installed and authenticated on that host
-(`CLAUDE_CODE_OAUTH_TOKEN`, created with `claude setup-token`). The status at
-the top of the card shows whether that is the case. `FLEET_VPS_ENABLED=false`
-turns the whole area off.
-
 ## Security notes
 
 - The server binds to `127.0.0.1` (`npm run dev` / `npm run start` pass
@@ -232,8 +214,8 @@ turns the whole area off.
   the console on the LAN/Tailnet). Do not expose it further: whoever reaches
   the API can start processes in your project directories — under your Claude
   account.
-- The four state-changing routes (`sessions`, `sessions/:id/message`, `vps`,
-  `hooks`) reject cross-origin requests: the `Origin` header, when a browser
+- The two state-changing routes (`sessions`, `sessions/:id/message`) reject
+  cross-origin requests: the `Origin` header, when a browser
   sends one, must match the request's own `Host` and be a loopback address.
   This is what stops a page open in your browser from driving the API via
   DNS rebinding or a no-preflight CSRF request — binding to localhost alone
@@ -241,9 +223,6 @@ turns the whole area off.
 - The **Auto-Permissions** switch sets `--dangerously-skip-permissions`.
   Required for unattended runs, but it hands the session every right your user
   has. Off by default.
-- Before writing `settings.json`, a copy is placed next to it as
-  `settings.json.bak-fleet-<time>`.
-
 ## Terms of use and your account
 
 This is a wrapper around Anthropic's own CLI, not a re-implementation of it.
