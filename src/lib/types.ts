@@ -1,3 +1,20 @@
+export interface Anforderung {
+  id: string
+  t: string
+  text: string
+  status: 'offen' | 'erledigt' | 'verworfen'
+  notiz?: string
+}
+
+export interface RollenBefund {
+  schweregrad: 'kritisch' | 'hoch' | 'mittel' | 'niedrig'
+  datei: string
+  zeile?: number | null
+  titel: string
+  beschreibung: string
+  status?: 'neu' | 'offen' | 'behoben'
+}
+
 export interface GraphNode {
   id: string
   status: 'idle' | 'running' | 'done' | 'error' | 'timeout'
@@ -14,6 +31,9 @@ export interface GraphNode {
   quelle: 'agent-tool' | 'rollenlauf' | null
   startedAt: string | null
   endedAt: string | null
+  kostenUsd: number
+  befunde: RollenBefund[] | null
+  nachpruefungen: number
 }
 
 export interface FeedLine {
@@ -39,6 +59,10 @@ export interface SessionState {
   tokensCached: number
   tokensCacheWrite: number
   anfragen: number
+  kostenUsd: number
+  anforderungen: Anforderung[]
+  worktreePath: string | null
+  worktreeBasis: string | null
   nodes: GraphNode[]
   antworten: { t: string; text: string }[]
   log: FeedLine[]

@@ -197,6 +197,50 @@ through the event stream on every event and end up in storage.
 Opus that way, the rest on Sonnet. The selector can force one model for all of
 them instead.
 
+**Reviews return verdict JSON, and code terminates the loop.** The standard
+review task runs with `--json-schema`: the CLI enforces a structured result
+(`verdict`, `befunde[]` with severity/file/line, summary). The console — not
+the model — decides what happens next: re-checks are capped at two per role
+and session; after that, open findings go to the human. A custom task skips
+the schema, since free-form prose may be exactly what was asked for.
+
+## Requirements list, handover, worktrees, costs
+
+Four mechanisms added in August 2026, all following the same principle:
+**state lives outside the LLM context.**
+
+- **Requirements list.** Every user message is appended verbatim to
+  `anforderungen/<id>.json` by the console — deterministically, not by
+  asking the model. The orchestrator's system prompt points at the file and
+  restricts it to maintaining `status`/`notiz` per entry — and the console
+  enforces that on read-back: entries are server-owned, only `status` and
+  `notiz` of known entries are merged in, whatever the model wrote. The file
+  deliberately lives outside `runs/`, next to nothing the model should touch.
+  The UI shows the list; a session ending with open entries gets called out.
+  This is the answer to follow-up requirements getting lost to compaction.
+- **Handover.** A finished session with open requirements offers
+  "handover → new session": a fresh process, fresh context, the open entries
+  seeded as the new session's requirements file and quoted in the prompt —
+  taken from the server-side state, not from the model-writable file. Full
+  context reset instead of trusting compaction.
+- **Worktree isolation.** Optional per session: `git worktree add -b
+  fleet/<short>` under `~/.fleet-console/worktrees/` — deliberately outside
+  `~/.claude`, because the worktree becomes the cwd of a possibly permissive
+  session and has no business sitting next to `settings.json` and `agents/`.
+  The session (and
+  its role runs) work in the copy; an unchanged worktree is removed at the
+  end, one with work in it is kept and reported. Interrupted sessions keep
+  theirs for `--resume`.
+- **Costs.** `total_cost_usd` from every `result` event (per process,
+  cumulative — role runs and restarts are folded in via a base amount). Not a
+  bill on a subscription, but the honest per-run consumption number.
+
+**Context parity.** Headless `-p` sessions load CLAUDE.md, skills and
+settings like interactive ones (this console deliberately does not use
+`--bare`). The `init` event's inventory — tool count, subagents, permission
+mode, cwd — is logged to the feed so a context mismatch is visible before it
+shows up as a quality problem.
+
 ## Storage and resuming
 
 Session state is written continuously to `~/.claude/fleet-console/runs/` and
@@ -229,3 +273,15 @@ Also deliberately absent:
   limit.
 - **No agent frameworks.** They need an API key with metered billing; this
   console deliberately inherits the subscription.
+- **No Claude Agent SDK.** Evaluated in August 2026: the SDK is the cleaner
+  substrate on paper (in-process hooks, `canUseTool`, structured output), but
+  it only supports API-key authentication — Anthropic explicitly does not
+  allow third-party products to offer claude.ai login. The CLI subprocess is
+  the officially supported way to inherit the subscription, so it stays. The
+  SDK's key benefit, structured output, is available on the CLI as
+  `--json-schema` anyway (used by role runs for verdict JSON).
+- **No Dynamic Workflows as the engine.** Saved workflows in
+  `.claude/workflows/` cannot be triggered headlessly from a server process
+  (they are invoked interactively via slash command or by the model itself).
+  The role run stays a thin CLI fan-out; workflow patterns worth keeping —
+  verdict schemas, iteration caps, cost accounting — are implemented directly.

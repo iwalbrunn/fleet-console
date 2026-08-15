@@ -39,7 +39,9 @@
     "statusFertig": "fertig",
     "statusFehler": "fehler",
     "statusAbgebrochen": "abgebrochen",
-    "statusUnterbrochen": "unterbrochen"
+    "statusUnterbrochen": "unterbrochen",
+    "worktree": "Worktree-Isolation",
+    "worktreeNote": "eigene Arbeitskopie (git worktree), wird bei Nicht-Nutzung aufgeräumt"
   },
   "stats": {
     "tokens": "Tokens",
@@ -62,15 +64,15 @@
   "messages": {
     "placeholderWartet": "Antworten und weitermachen …",
     "placeholderRunning": "Nachricht an die Session …",
-    "send": "Senden",
-    "attach": "mitschicken:",
-    "all": "alle",
-    "attachRoleTitle": "Nachricht weist den Orchestrator an, „{role}“ zu beauftragen"
+    "send": "Senden"
   },
   "roleRun": {
     "noRoleAlert": "Diese Runde lief ohne Rolle — kein Review erfolgt. Der Rollenlauf holt es nach, ohne den Orchestrator zu fragen.",
     "startRun": "Rollenlauf starten",
     "taskReset": "Auftrag zurücksetzen",
+    "briefingButton": "Briefing-Vorlage",
+    "briefingTitle": "Füllt den Auftrag mit einer Vorlage: Ziel, Scope, Dateien, erwartetes Ergebnis — nie nur „review das“.",
+    "briefingText": "Ziel: \nScope (nur … / ausdrücklich nicht …): \nRelevante Dateien: \nErwartetes Ergebnis (Format): ",
     "attachState": "Stand mitgeben",
     "attachStateTitle": "Der Arbeitsstand wird einmal ermittelt und allen Rollen mitgegeben, statt dass ihn jede selbst zusammensucht",
     "emptyTaskNote": "Leerer Auftrag = Prüfung des uncommitteten Stands. Jeder andere Text geht jeder Rolle wörtlich zu.",
@@ -188,7 +190,8 @@
     "nightRun": "Nachtlauf · vps02",
     "manage": "verwalten",
     "hookCard": "Hook · security-reviewer",
-    "hookCardNote": "Startet automatisch nach Sessions mit Code-Änderungen"
+    "hookCardNote": "Startet automatisch nach Sessions mit Code-Änderungen",
+    "promptHint": "Vollständige Spezifikation upfront — alle Teil-Anforderungen gleich hier nennen. Tröpfchenweises Nachschärfen kostet Qualität und Runden."
   },
   "console": {
     "noSession": "Keine laufende Session",
@@ -227,5 +230,14 @@
     "resumeFailed": "Fortsetzen fehlgeschlagen",
     "applyFailed": "Umstellen fehlgeschlagen",
     "roleRunFailed": "Rollenlauf konnte nicht starten"
+  },
+  "requirements": {
+    "title": "Anforderungen",
+    "open": "offen"
+  },
+  "handover": {
+    "button": "Übergabe → neue Session",
+    "title": "Startet eine frische Session mit vollem Kontext-Reset — die offenen Anforderungen werden übernommen.",
+    "promptIntro": "Fortsetzung einer früheren Session mit frischem Kontext (Übergabe). Verschaffe dir zuerst den Stand: git log der letzten Commits, git status, dann die Anforderungsliste. Offene Anforderungen aus der Übergabe:"
   }
 }

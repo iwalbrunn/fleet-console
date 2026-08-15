@@ -11,6 +11,7 @@ import {
   fmtDuration,
   fmtTime,
   fmtTokens,
+  type Anforderung,
   type FeedLine,
   type GraphNode,
   type ProjectEntry,
@@ -46,20 +47,25 @@ export default function Page() {
 
   const [projectId, setProjectId] = useState('')
   const [project, setProject] = useState('') // gewählte Arbeitskopie
-  const [model, setModel] = useState('sonnet')
+  // Standard ist das stärkste Modell — die Umsetzung trägt die Session,
+  // gespart wird bei den Prüfrollen, nicht beim Orchestrator.
+  const [model, setModel] = useState('fable')
   const [picked, setPicked] = useState<string[]>([])
   const [prompt, setPrompt] = useState('')
   const [skip, setSkip] = useState(false)
+  const [worktree, setWorktree] = useState(false)
+  /** Session-Id, deren offene Anforderungen die nächste Session übernimmt. */
+  const [uebergabeVon, setUebergabeVon] = useState<string | null>(null)
 
   const [session, setSession] = useState<SessionState | null>(null)
   const [sessions, setSessions] = useState<SessionState[]>([])
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [log, setLog] = useState<FeedLine[]>([])
-  const [tokens, setTokens] = useState({ in: 0, out: 0, cached: 0, cacheWrite: 0, anfragen: 0 })
+  const [tokens, setTokens] = useState({ in: 0, out: 0, cached: 0, cacheWrite: 0, anfragen: 0, kosten: 0 })
+  const [anforderungen, setAnforderungen] = useState<Anforderung[]>([])
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [ansicht, setAnsicht] = useState<'graph' | 'antwort'>('graph')
   const [neueAntwort, setNeueAntwort] = useState(false)
-  const [mitRollen, setMitRollen] = useState<string[]>([])
   const [feedFilter, setFeedFilter] = useState<'alles' | 'werkzeuge' | 'rollen'>('alles')
   const [antworten, setAntworten] = useState<{ t: string; text: string }[]>([])
   const [links, setLinks] = useState(270)
@@ -104,7 +110,7 @@ export default function Page() {
           setNodes(wieder.nodes)
           setLog(wieder.log)
           setAntworten(wieder.antworten ?? [])
-          setTokens({ in: wieder.tokensIn, out: wieder.tokensOut, cached: wieder.tokensCached, cacheWrite: wieder.tokensCacheWrite ?? 0, anfragen: wieder.anfragen ?? 0 })
+          setTokens({ in: wieder.tokensIn, out: wieder.tokensOut, cached: wieder.tokensCached, cacheWrite: wieder.tokensCacheWrite ?? 0, anfragen: wieder.anfragen ?? 0, kosten: wieder.kostenUsd ?? 0 })
           setModel(wieder.model)
           setPicked(wieder.roles)
           setSkip(wieder.skipPermissions)
@@ -194,7 +200,8 @@ export default function Page() {
       setNodes(s.nodes)
       setLog(s.log)
       setAntworten(s.antworten ?? [])
-      setTokens({ in: s.tokensIn, out: s.tokensOut, cached: s.tokensCached, cacheWrite: s.tokensCacheWrite ?? 0, anfragen: s.anfragen ?? 0 })
+      setTokens({ in: s.tokensIn, out: s.tokensOut, cached: s.tokensCached, cacheWrite: s.tokensCacheWrite ?? 0, anfragen: s.anfragen ?? 0, kosten: s.kostenUsd ?? 0 })
+      setAnforderungen(s.anforderungen ?? [])
     })
     es.addEventListener('line', (e) => {
       const line: FeedLine = JSON.parse((e as MessageEvent).data)
@@ -206,7 +213,8 @@ export default function Page() {
       // Ansicht nicht wegschalten — nur anzeigen, dass etwas Neues da ist.
       setNeueAntwort(true)
     })
-    es.addEventListener('tokens', (e) => setTokens(JSON.parse((e as MessageEvent).data)))
+    es.addEventListener('tokens', (e) => setTokens((alt) => ({ ...alt, ...JSON.parse((e as MessageEvent).data) })))
+    es.addEventListener('anforderungen', (e) => setAnforderungen(JSON.parse((e as MessageEvent).data)))
     es.addEventListener('end', () => es.close())
     es.onerror = () => es.close()
 
@@ -234,31 +242,42 @@ export default function Page() {
     const res = await fetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project, model, roles: picked, prompt, skipPermissions: skip }),
+      body: JSON.stringify({ project, model, roles: picked, prompt, skipPermissions: skip, worktree, uebergabeVon: uebergabeVon ?? undefined }),
     })
     const data = await res.json()
     if (!res.ok) {
       setError(data.error ?? t('errors.startFailed'))
       return
     }
+    setUebergabeVon(null)
     setSession(data.session)
-    setMitRollen([])
     setSessions((prev) => [data.session, ...prev])
     setNodes(data.session.nodes)
     setLog(data.session.log)
-    setTokens({ in: data.session.tokensIn, out: data.session.tokensOut, cached: data.session.tokensCached, cacheWrite: data.session.tokensCacheWrite ?? 0, anfragen: data.session.anfragen ?? 0 })
+    setTokens({ in: data.session.tokensIn, out: data.session.tokensOut, cached: data.session.tokensCached, cacheWrite: data.session.tokensCacheWrite ?? 0, anfragen: data.session.anfragen ?? 0, kosten: data.session.kostenUsd ?? 0 })
     setTab('konsole')
-  }, [project, model, picked, prompt, skip])
+  }, [project, model, picked, prompt, skip, worktree, uebergabeVon])
+
+  /** Übergabe: beendete Session → frische Session mit vollem Kontext-Reset.
+   *  Die offenen Anforderungen wandern in den Prompt UND (serverseitig) in
+   *  die Anforderungsliste der neuen Session. */
+  const uebergabeVorbereiten = () => {
+    if (!session) return
+    const offene = anforderungen.filter((a) => a.status === 'offen')
+    const liste = offene.map((a) => `- ${a.text.split('\n')[0].slice(0, 200)}`).join('\n')
+    setUebergabeVon(session.id)
+    setPrompt(t('handover.promptIntro') + (liste ? `\n\n${liste}` : ''))
+    setModel(session.model)
+    setPicked(session.roles)
+    setProject(session.project)
+  }
 
   const send = async () => {
     if (!session || !draft.trim()) return
-    // Die Delegations-Grundregeln stehen im Systemprompt jeder Runde. Der
-    // Anhang hier ist nur für den Fall, dass Rollen ausdrücklich angehakt
-    // sind — kurz, sonst zwingt jede Folgefrage eine neue Review-Runde auf.
-    const auftrag = mitRollen.length
-      ? `\n\n---\nBeauftrage dafür ${mitRollen.map((r) => `\`${r}\``).join(', ')} über das Agent-Tool, jeweils mit dem Teil, der in die Rolle fällt.`
-      : ''
-    const text = draft.trim() + auftrag
+    // Folgenachrichten gehen unverändert an den Orchestrator. Früher hing
+    // hier ein Delegations-Anhang dran — der hat aus jedem „ja bitte" eine
+    // volle Review-Runde gemacht. Reviews laufen jetzt über den Rollenlauf.
+    const text = draft.trim()
     setDraft('')
     await fetch(`/api/sessions/${session.id}/message`, {
       method: 'POST',
@@ -584,7 +603,7 @@ export default function Page() {
                   setSession(s)
                   setNodes(s.nodes)
                   setLog(s.log)
-                  setTokens({ in: s.tokensIn, out: s.tokensOut, cached: s.tokensCached, cacheWrite: s.tokensCacheWrite ?? 0, anfragen: s.anfragen ?? 0 })
+                  setTokens({ in: s.tokensIn, out: s.tokensOut, cached: s.tokensCached, cacheWrite: s.tokensCacheWrite ?? 0, anfragen: s.anfragen ?? 0, kosten: s.kostenUsd ?? 0 })
                 }}
                 style={{ background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', cursor: 'pointer' }}
               >
@@ -825,6 +844,9 @@ export default function Page() {
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder={t('sidebar.promptPlaceholder')}
               />
+              <div style={{ fontSize: 10, color: 'var(--color-neutral-500)', lineHeight: 1.5 }}>
+                {t('sidebar.promptHint')}
+              </div>
             </div>
           )}
 
@@ -871,6 +893,55 @@ export default function Page() {
                   height: 13,
                   borderRadius: '50%',
                   background: skip ? 'var(--color-accent)' : 'var(--color-neutral-600)',
+                  transition: 'left .15s ease',
+                }}
+              />
+            </div>
+          </button>
+
+          <button
+            onClick={() => setWorktree(!worktree)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              padding: '9px 10px',
+              border: '1px solid var(--color-divider)',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+              background: 'transparent',
+              color: 'inherit',
+              fontFamily: 'inherit',
+              textAlign: 'left',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13 }}>{t('session.worktree')}</div>
+              <div className="mono" style={{ fontSize: 10, color: 'var(--color-neutral-500)' }}>
+                {t('session.worktreeNote')}
+              </div>
+            </div>
+            <div
+              style={{
+                width: 34,
+                height: 19,
+                borderRadius: 99,
+                background: worktree ? 'rgba(145,132,217,.35)' : 'rgba(233,233,237,.1)',
+                border: `1px solid ${worktree ? 'var(--color-accent)' : 'var(--color-divider)'}`,
+                position: 'relative',
+                flex: 'none',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  left: worktree ? 16 : 2,
+                  width: 13,
+                  height: 13,
+                  borderRadius: '50%',
+                  background: worktree ? 'var(--color-accent)' : 'var(--color-neutral-600)',
                   transition: 'left .15s ease',
                 }}
               />
@@ -1040,6 +1111,9 @@ export default function Page() {
                         quelle: null,
                         startedAt: null,
                         endedAt: null,
+                        kostenUsd: 0,
+                        befunde: null,
+                        nachpruefungen: 0,
                       },
                     ]
               }
@@ -1171,13 +1245,22 @@ export default function Page() {
                       >
                         {t('roleRun.attachState')}
                       </button>
-                      {pipelineAuftrag && (
+                      {pipelineAuftrag ? (
                         <button
                           className="btn btn-ghost"
                           style={{ fontSize: 10.5, padding: '2px 7px' }}
                           onClick={() => setPipelineAuftrag('')}
                         >
                           {t('roleRun.taskReset')}
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: 10.5, padding: '2px 7px' }}
+                          title={t('roleRun.briefingTitle')}
+                          onClick={() => setPipelineAuftrag(t('roleRun.briefingText'))}
+                        >
+                          {t('roleRun.briefingButton')}
                         </button>
                       )}
                       <span style={{ fontSize: 10.5, color: 'var(--color-neutral-600)', flex: 1, minWidth: 180 }}>
@@ -1241,7 +1324,7 @@ export default function Page() {
                 <div style={{ fontSize: 9.5, color: 'var(--color-neutral-600)', lineHeight: 1.5 }}>
                   {fmtTokens(tokens.in)} {t('stats.in')} · {t('stats.cache')} {fmtTokens(tokens.cacheWrite)}↑ {fmtTokens(tokens.cached)}↓
                   <br />
-                  {tokens.anfragen} {t('stats.requests')}
+                  {tokens.anfragen} {t('stats.requests')}{tokens.kosten > 0 ? ` · ≈ $${tokens.kosten.toFixed(2)}` : ''}
                 </div>
               </div>
               <div className="card" style={{ gap: 1, padding: '9px 11px' }}>
@@ -1249,6 +1332,56 @@ export default function Page() {
                 <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{elapsed}</div>
               </div>
             </div>
+
+            {anforderungen.length > 0 && (
+              <div className="card" style={{ gap: 6, padding: '9px 11px', marginBottom: 12 }}>
+                <div className="kicker" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ flex: 1 }}>
+                    {t('requirements.title')} · {anforderungen.filter((a) => a.status === 'offen').length} {t('requirements.open')}
+                  </span>
+                  {session && !prozessLebt && anforderungen.some((a) => a.status === 'offen') && (
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: 10.5, padding: '2px 8px' }}
+                      title={t('handover.title')}
+                      onClick={uebergabeVorbereiten}
+                    >
+                      {t('handover.button')}
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
+                  {anforderungen.map((a) => (
+                    <div key={a.id} style={{ fontSize: 11, lineHeight: 1.45, display: 'flex', gap: 6 }} title={a.notiz ?? a.text}>
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          color:
+                            a.status === 'erledigt'
+                              ? 'var(--color-neutral-400)'
+                              : a.status === 'verworfen'
+                                ? 'var(--color-neutral-600)'
+                                : 'var(--color-accent)',
+                        }}
+                      >
+                        {a.status === 'erledigt' ? '✓' : a.status === 'verworfen' ? '–' : '○'}
+                      </span>
+                      <span
+                        style={{
+                          color: a.status === 'offen' ? 'var(--color-text)' : 'var(--color-neutral-500)',
+                          textDecoration: a.status === 'verworfen' ? 'line-through' : 'none',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {a.text}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <div className="kicker">{t('feed.title')}</div>
@@ -1341,31 +1474,6 @@ export default function Page() {
                 {t('waitState.waitingFor', { time: wartetSeit ?? '' })}
               </div>
             )}
-            <div className="toolbar" style={{ marginTop: 8 }}>
-              <span className="muted" style={{ fontSize: 10 }}>{t('messages.attach')}</span>
-              {roles.map((r) => {
-                const an = mitRollen.includes(r.name)
-                return (
-                  <button
-                    key={r.name}
-                    className="chip"
-                    data-on={an}
-                    title={t('messages.attachRoleTitle', { role: r.name })}
-                    onClick={() => setMitRollen(an ? mitRollen.filter((x) => x !== r.name) : [...mitRollen, r.name])}
-                  >
-                    {r.name.replace('-', ' ')}
-                  </button>
-                )
-              })}
-              <button
-                className="chip"
-                data-on={mitRollen.length === roles.length && roles.length > 0}
-                onClick={() => setMitRollen(mitRollen.length === roles.length ? [] : roles.map((r) => r.name))}
-              >
-                {t('messages.all')}
-              </button>
-            </div>
-
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <input
                 className="input"

@@ -39,7 +39,9 @@
     "statusFertig": "done",
     "statusFehler": "error",
     "statusAbgebrochen": "aborted",
-    "statusUnterbrochen": "interrupted"
+    "statusUnterbrochen": "interrupted",
+    "worktree": "Worktree isolation",
+    "worktreeNote": "own working copy (git worktree), cleaned up if unused"
   },
   "stats": {
     "tokens": "Tokens",
@@ -62,15 +64,15 @@
   "messages": {
     "placeholderWartet": "Reply and continue...",
     "placeholderRunning": "Message to the session...",
-    "send": "Send",
-    "attach": "attach:",
-    "all": "all",
-    "attachRoleTitle": "The message instructs the orchestrator to delegate to \"{role}\""
+    "send": "Send"
   },
   "roleRun": {
     "noRoleAlert": "This round ran without a role — no review performed. The role run catches up without asking the orchestrator.",
     "startRun": "Start Role Run",
     "taskReset": "Reset Task",
+    "briefingButton": "Briefing template",
+    "briefingTitle": "Fills the task with a template: goal, scope, files, expected result — never just \"review this\".",
+    "briefingText": "Goal: \nScope (only … / explicitly not …): \nRelevant files: \nExpected result (format): ",
     "attachState": "Attach State",
     "attachStateTitle": "The working state is collected once and given to all roles, instead of each gathering it themselves",
     "emptyTaskNote": "Empty task = review of the uncommitted state. Any other text goes to each role verbatim.",
@@ -188,7 +190,8 @@
     "nightRun": "Night run · vps02",
     "manage": "manage",
     "hookCard": "Hook · security-reviewer",
-    "hookCardNote": "Runs automatically after sessions with code changes"
+    "hookCardNote": "Runs automatically after sessions with code changes",
+    "promptHint": "Full specification upfront — name every sub-requirement here. Drip-feeding details costs quality and rounds."
   },
   "console": {
     "noSession": "No running session",
@@ -227,5 +230,14 @@
     "resumeFailed": "Resume failed",
     "applyFailed": "Apply failed",
     "roleRunFailed": "Role run could not start"
+  },
+  "requirements": {
+    "title": "Requirements",
+    "open": "open"
+  },
+  "handover": {
+    "button": "Handover → new session",
+    "title": "Starts a fresh session with a full context reset — open requirements carry over.",
+    "promptIntro": "Continuation of an earlier session with fresh context (handover). First get up to speed: recent git log, git status, then the requirements list. Open requirements from the handover:"
   }
 }

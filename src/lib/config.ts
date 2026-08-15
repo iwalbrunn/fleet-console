@@ -11,6 +11,14 @@ export const SETTINGS_FILE = path.join(CLAUDE_DIR, 'settings.json')
 export const FLEET_DIR = path.join(CLAUDE_DIR, 'fleet-console')
 export const RUNS_DIR = path.join(FLEET_DIR, 'runs')
 export const REPORTS_DIR = path.join(FLEET_DIR, 'reports')
+/** Anforderungslisten — bewusst NICHT unter runs/: auf diese Dateien wird
+ *  das Modell per Systemprompt zum Schreiben eingeladen, und es soll dabei
+ *  nicht neben den Session-Zuständen arbeiten. */
+export const ANFORDERUNGEN_DIR = path.join(FLEET_DIR, 'anforderungen')
+/** Isolierte Arbeitskopien. Bewusst AUSSERHALB von ~/.claude: der Worktree
+ *  wird cwd einer (ggf. permissiven) Session — er hat nichts neben
+ *  settings.json, agents/ und den Hooks verloren. */
+export const WORKTREES_DIR = path.join(HOME, '.fleet-console', 'worktrees')
 
 /** Wo die Konsole nach Projekten sucht. */
 export const PROJECT_ROOTS = (process.env.FLEET_PROJECT_ROOTS ?? path.join(HOME, 'Developer'))
@@ -51,6 +59,7 @@ export const GRACE_SEC = Math.max(1, Number(process.env.FLEET_GRACE_SEC ?? 10))
 export const DIFF_MAX = Math.max(2000, Number(process.env.FLEET_DIFF_MAX ?? 60000))
 
 export const MODELS = [
+  { id: 'fable', label: 'Fable' },
   { id: 'opus', label: 'Opus' },
   { id: 'sonnet', label: 'Sonnet' },
   { id: 'haiku', label: 'Haiku' },

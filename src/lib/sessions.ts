@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 import { randomUUID } from 'node:crypto'
 import { listRoles } from './settings'
 import {
+  ANFORDERUNGEN_DIR,
   AUTOCOMPACT,
   CLAUDE_BIN,
   DIFF_MAX,
@@ -12,12 +13,47 @@ import {
   HOME,
   PIPELINE_MODEL,
   PIPELINE_PARALLEL,
+  PROJECT_ROOTS,
   REPORTS_DIR,
   ROLE_TIMEOUT_SEC,
   RUNS_DIR,
+  WORKTREES_DIR,
 } from './config'
 
+/** Rollennamen landen in Dateipfaden und CLI-Argumenten — alles außerhalb
+ *  dieses Musters wird nirgends hingeschrieben und nirgends gestartet. */
+const ROLLENNAME = /^[A-Za-z0-9_-]+$/
+
 export type NodeStatus = 'idle' | 'running' | 'done' | 'error' | 'timeout'
+
+export interface RollenBefund {
+  schweregrad: 'kritisch' | 'hoch' | 'mittel' | 'niedrig'
+  datei: string
+  zeile?: number | null
+  titel: string
+  beschreibung: string
+  /** `neu` beim Erstlauf; bei der Nachprüfung `behoben` oder `offen`. */
+  status?: 'neu' | 'offen' | 'behoben'
+}
+
+export interface RollenVerdict {
+  verdict: 'ok' | 'befunde'
+  befunde: RollenBefund[]
+  zusammenfassung?: string
+}
+
+/** Eintrag der Anforderungsliste. Die Console trägt jede Nutzer-Nachricht
+ *  deterministisch ein — eine Anforderung ist ein Datensatz in einer Datei,
+ *  keine Chat-Zeile, die der Verdichtung zum Opfer fällt. Der Orchestrator
+ *  pflegt nur den Status. */
+export interface Anforderung {
+  id: string
+  t: string
+  text: string
+  status: 'offen' | 'erledigt' | 'verworfen'
+  /** Kurzbegründung des Orchestrators, v. a. bei `verworfen`. */
+  notiz?: string
+}
 
 export interface GraphNode {
   id: string
@@ -40,6 +76,14 @@ export interface GraphNode {
   volltext: string
   /** Abgelegter Bericht dieser Rolle, sofern geschrieben. */
   bericht: string | null
+  /** Kosten dieser Rolle in USD (API-Listenpreis, aus dem result-Event). */
+  kostenUsd: number
+  /** Strukturiertes Review-Ergebnis des letzten Rollenlaufs, sofern die
+   *  Rolle mit Schema lief. Grundlage der Nachprüfung — nicht der Freitext. */
+  befunde: RollenBefund[] | null
+  /** Wie oft diese Rolle in der Session schon nachgeprüft hat. Ab der
+   *  Grenze gehört der Rest an den Menschen, nicht in weitere Runden. */
+  nachpruefungen: number
   /** Woher der Lauf kam: Agent-Tool des Orchestrators oder eigener Rollenlauf. */
   quelle: 'agent-tool' | 'rollenlauf' | null
   startedAt: string | null
@@ -60,6 +104,9 @@ export function leererKnoten(id: string): GraphNode {
     ergebnis: '',
     volltext: '',
     bericht: null,
+    kostenUsd: 0,
+    befunde: null,
+    nachpruefungen: 0,
     quelle: null,
     startedAt: null,
     endedAt: null,
@@ -95,6 +142,18 @@ export interface SessionState {
   tokensCacheWrite: number
   /** Anzahl API-Anfragen — der eigentliche Treiber langer Sitzungen. */
   anfragen: number
+  /** Kosten in USD zum API-Listenpreis. Beim Abo-Login ist das kein echter
+   *  Rechnungsbetrag, aber das ehrlichste Maß für den Verbrauch je Lauf. */
+  kostenUsd: number
+  /** Spiegel der Anforderungsdatei für die Anzeige. Quelle der Wahrheit ist
+   *  die Datei — sie ist es, die der Orchestrator liest und pflegt. */
+  anforderungen: Anforderung[]
+  /** Isolierte Arbeitskopie (git worktree), wenn beim Start gewählt.
+   *  `project` bleibt das Original — für Anzeige und Projektauswahl. */
+  worktreePath: string | null
+  /** HEAD des Projekts beim Anlegen des Worktrees — Vergleichsbasis fürs
+   *  Aufräumen: keine Commits und kein Diff heißt „unverändert, weg damit". */
+  worktreeBasis: string | null
   nodes: GraphNode[]
   /** Vollständige Antworten des Orchestrators — ungekürzt, für die Anzeige. */
   antworten: { t: string; text: string }[]
@@ -124,6 +183,10 @@ interface Session {
   /** Zeitpunkt der letzten Ablage, gegen zu häufiges Schreiben. */
   zuletztAbgelegt: number
   ablageGeplant: boolean
+  /** Kosten abgeschlossener Prozesse und Rollenläufe. Das result-Event
+   *  meldet die Kosten je PROZESS kumulativ — nach einem Neustart (--resume)
+   *  zählt es wieder von null, deshalb die Basis. */
+  kostenBasisUsd: number
 }
 
 const MAX_LOG = 400
@@ -184,49 +247,57 @@ function setNode(s: Session, id: string, patch: Partial<GraphNode>) {
   planeAblage(s)
 }
 
-function buildPrompt(roles: string[], prompt: string): string {
-  if (!roles.length) return prompt
-  const list = roles.map((r) => `\`${r}\``).join(', ')
-  return [
-    prompt,
-    '',
-    '---',
-    `Für diese Aufgabe stehen folgende Subagenten bereit: ${list}.`,
-    'Beauftrage sie über das Agent-Tool — jeden mit dem Teil, der in seine Rolle fällt — und erledige',
-    'ihre Anteile nicht selbst. Reviews laufen EINMAL am Ende der Aufgabe über den fertigen Diff,',
-    'nicht nach jedem Zwischenschritt. Fasse ihre Rückmeldungen kurz zusammen — nur Befunde, kein Lob.',
-  ].join('\n')
-}
-
 /** Steht als Systemanweisung in JEDER Runde — nicht nur in der ersten
- *  Nachricht. Ohne das erledigt der Orchestrator Folgeaufträge selbst. */
-export function orchestratorAuftrag(roles: string[]): string {
+ *  Nachricht. Die Umsetzung bleibt beim Orchestrator selbst; die Prüfrollen
+ *  laufen als eigene Sessions (Rollenlauf), nicht über sein Agent-Tool.
+ *  Der frühere Delegations-Zwang hat aus jeder Folgefrage eine Review-Runde
+ *  gemacht und die eigentliche Umsetzung verdrängt. */
+export function orchestratorAuftrag(roles: string[], anforderungenDatei?: string): string {
   const liste = roles.map((r) => `\`${r}\``).join(', ')
-  return [
-    'Du arbeitest in dieser Sitzung als Orchestrator einer Rollenrunde.',
-    `Verfügbare Subagenten: ${liste}.`,
+  const teile = [
+    'Du bist die umsetzende Session dieser Aufgabe. Setze Anforderungen selbst um —',
+    'Recherche-Subagenten (z. B. Explore) darfst du dafür frei nutzen.',
     '',
-    'Regeln — auch für Folgeaufträge:',
-    '- Fällt ein Teil der Arbeit in die Rolle eines dieser Subagenten, beauftragst du ihn über das',
-    '  Agent-Tool, statt ihn selbst zu erledigen.',
-    '- Reviews (security-reviewer, senior-developer, business-analyst, project-manager) laufen',
-    '  EINMAL, am Ende der gesamten Aufgabe, über den fertigen Diff — NICHT nach jedem',
-    '  Zwischenschritt und nicht erneut nach kleinen Korrekturen. Nach einer Nachbesserung genügt',
-    '  es, der Rolle ihre offenen Befunde und den Folge-Diff zu geben („welche sind behoben?").',
-    '- Skaliere den Aufwand: kleine Änderung (wenige Zeilen, Doku, Umbenennung) → höchstens eine',
-    '  passende Rolle oder gar keine; nur substanzielle Umsetzungen brauchen mehrere Prüfrollen.',
-    '  Rollen, deren Bereich der Diff nicht berührt (z. B. UI-Rolle ohne UI-Änderung), lässt du weg.',
-    '- Gib jedem Subagenten ein Ausgabe-Budget mit: nur Befunde, je Befund Datei:Zeile plus 1–2',
-    '  Sätze, keine Zusammenfassung des Prüfumfangs, keine Auflistung dessen, was in Ordnung ist.',
-    '- Gib ihre Rückmeldungen im Ergebnis wieder — nur die Befunde, mit Quelle („laut security-reviewer …").',
-    '- Sag in einem Satz, wenn du bewusst keine Rolle beauftragt hast, und warum.',
-  ].join('\n')
+  ]
+  if (roles.length) {
+    teile.push(
+      `Die Prüfrollen (${liste}) laufen als separate, parallele Sessions („Rollenlauf")`,
+      'außerhalb dieser Unterhaltung. Beauftrage sie NICHT über das Agent-Tool — auch nicht',
+      'am Ende der Aufgabe. Einzige Ausnahme: der Nutzer verlangt es ausdrücklich in seiner Nachricht.',
+      '',
+    )
+  }
+  teile.push('Regeln — auch für Folgeaufträge:')
+  if (anforderungenDatei) {
+    teile.push(
+      `- Die Anforderungsliste dieser Session liegt in ${anforderungenDatei}`,
+      '  (JSON-Array; Felder id, t, text, status, notiz). Die Konsole trägt jede Nutzer-Nachricht',
+      '  dort automatisch mit status "offen" ein. Pflege NUR die Felder status und notiz:',
+      '  "erledigt" erst, wenn umgesetzt und geprüft; "verworfen" mit kurzer notiz, wenn eine',
+      '  Nachricht keine eigene Anforderung ist (z. B. eine reine Bestätigung). Füge keine',
+      '  Einträge hinzu und lösche keine.',
+      '- Prüfe vor jedem „fertig" die Liste: kein offener Eintrag darf unerledigt und unerwähnt bleiben.',
+    )
+  } else {
+    teile.push(
+      '- Führe bei mehrteiligen Aufträgen eine Aufgabenliste und trage jede nachgereichte Anforderung',
+      '  sofort dort ein. Prüfe vor jedem „fertig" die Liste: keine Anforderung — auch keine aus',
+      '  früheren Nachrichten — darf unerledigt und unerwähnt bleiben.',
+    )
+  }
+  teile.push(
+    '- Nach Code-Änderungen laufen die vorhandenen deterministischen Prüfungen des Projekts',
+    '  (Tests, Lint, Build) — kein zusätzliches Selbst-Review darüber hinaus.',
+    '- Sag am Ende jeder Runde in je einem Satz, was umgesetzt ist und was noch offen ist.',
+  )
+  return teile.join('\n')
 }
 
 export function buildArgs(opts: {
   model: string
   skipPermissions: boolean
   roles?: string[]
+  anforderungenDatei?: string
 }): string[] {
   const args = [
     '-p',
@@ -238,8 +309,10 @@ export function buildArgs(opts: {
     '--model',
     opts.model,
   ]
+  if (opts.roles?.length || opts.anforderungenDatei) {
+    args.push('--append-system-prompt', orchestratorAuftrag(opts.roles ?? [], opts.anforderungenDatei))
+  }
   if (opts.roles?.length) {
-    args.push('--append-system-prompt', orchestratorAuftrag(opts.roles))
     // Ohne das schweigt der Stream, solange ein Subagent arbeitet: seine
     // Ereignisse kommen dann mit parent_tool_use_id herein und lassen sich
     // dem Knoten zuordnen — Phase, Werkzeuge und Tokens je Rolle.
@@ -271,15 +344,69 @@ export function cliPreview(opts: { model: string; skipPermissions: boolean; role
   return cliText(buildArgs(opts))
 }
 
-export function startSession(opts: {
+/** Wirksames Arbeitsverzeichnis: die isolierte Arbeitskopie, wenn es eine
+ *  gibt, sonst der Projektordner. */
+function arbeitsdir(state: SessionState): string {
+  return state.worktreePath ?? state.project
+}
+
+/** Legt eine isolierte Arbeitskopie an: eigener Branch `fleet/<kurz>` ab dem
+ *  aktuellen HEAD. Die Basis wird gemerkt, damit das Aufräumen später
+ *  „unverändert" erkennen kann. */
+async function erstelleWorktree(project: string, id: string): Promise<{ pfad: string; basis: string }> {
+  const kurz = id.slice(0, 8)
+  const pfad = path.join(WORKTREES_DIR, kurz)
+  await fs.mkdir(WORKTREES_DIR, { recursive: true })
+  const basis = (await execFile('git', ['-C', project, 'rev-parse', 'HEAD'], { timeout: 15000 })).stdout.trim()
+  await execFile('git', ['-C', project, 'worktree', 'add', '-b', `fleet/${kurz}`, pfad], { timeout: 30000 })
+  return { pfad, basis }
+}
+
+/** Räumt die Arbeitskopie am Sessionende weg — aber nur, wenn sie weder
+ *  uncommittete Änderungen noch eigene Commits hat. Alles andere bleibt
+ *  liegen und wird mit Pfad gemeldet. */
+async function raeumeWorktreeAuf(s: Session) {
+  const { worktreePath: wt, worktreeBasis: basis, project } = s.state
+  if (!wt) return
+  try {
+    const status = (await execFile('git', ['-C', wt, 'status', '--porcelain'], { timeout: 15000 })).stdout.trim()
+    const head = (await execFile('git', ['-C', wt, 'rev-parse', 'HEAD'], { timeout: 15000 })).stdout.trim()
+    if (status || (basis && head !== basis)) {
+      push(s, {
+        agent: 'system',
+        kind: 'system',
+        text: `Worktree behalten — er enthält Arbeit: ${wt} (Branch fleet/${s.state.id.slice(0, 8)})`,
+      })
+      return
+    }
+    await execFile('git', ['-C', project, 'worktree', 'remove', '--force', wt], { timeout: 20000 })
+    await execFile('git', ['-C', project, 'branch', '-D', `fleet/${s.state.id.slice(0, 8)}`], { timeout: 15000 }).catch(
+      () => {},
+    )
+    s.state.worktreePath = null
+    push(s, { agent: 'system', kind: 'system', text: 'Worktree unverändert — aufgeräumt.' })
+    planeAblage(s)
+  } catch {
+    /* Aufräumen ist ein Extra — ein hängender Worktree kippt nichts */
+  }
+}
+
+export async function startSession(opts: {
   project: string
   model: string
   roles: string[]
   prompt: string
   skipPermissions: boolean
-}): SessionState {
+  worktree?: boolean
+  uebergabeVon?: string
+}): Promise<SessionState> {
   const id = randomUUID()
-  const args = buildArgs({ model: opts.model, skipPermissions: opts.skipPermissions, roles: opts.roles })
+  const args = buildArgs({
+    model: opts.model,
+    skipPermissions: opts.skipPermissions,
+    roles: opts.roles,
+    anforderungenDatei: anforderungenDatei(id),
+  })
 
   const state: SessionState = {
     id,
@@ -297,6 +424,8 @@ export function startSession(opts: {
     tokensCached: 0,
     tokensCacheWrite: 0,
     anfragen: 0,
+    kostenUsd: 0,
+    anforderungen: [],
     antworten: [],
     nodes: [
       {
@@ -314,6 +443,8 @@ export function startSession(opts: {
     cli: cliText(args),
     pipelineAktiv: false,
     pipelineRollen: [],
+    worktreePath: null,
+    worktreeBasis: null,
   }
 
   const session: Session = {
@@ -329,16 +460,76 @@ export function startSession(opts: {
     rollenProzesse: new Map(),
     zuletztAbgelegt: 0,
     ablageGeplant: false,
+    kostenBasisUsd: 0,
   }
   registry.set(id, session)
 
-  if (!starteProzess(session, args)) return state
-  push(session, { agent: 'system', kind: 'system', text: `Arbeitsverzeichnis: ${opts.project}` })
+  if (opts.worktree) {
+    try {
+      const wt = await erstelleWorktree(opts.project, id)
+      state.worktreePath = wt.pfad
+      state.worktreeBasis = wt.basis
+      push(session, {
+        agent: 'system',
+        kind: 'system',
+        text: `Worktree-Isolation: eigene Arbeitskopie ${wt.pfad} (Branch fleet/${id.slice(0, 8)})`,
+      })
+    } catch (err) {
+      // Isolation war ausdrücklich gewünscht — dann nicht leise im
+      // Original weiterarbeiten, sondern sauber scheitern.
+      state.status = 'fehler'
+      state.endedAt = now()
+      push(session, { agent: 'system', kind: 'error', text: `Worktree konnte nicht angelegt werden: ${String(err).slice(0, 300)}` })
+      void persist(session)
+      return state
+    }
+  }
 
-  // Der Prompt geht als erste Nachricht in den Stream-Input.
-  sendMessage(id, buildPrompt(opts.roles, opts.prompt))
+  // Übergabe aus einer früheren Session: deren offene Anforderungen werden
+  // die Startliste dieser Session (Full-Context-Reset statt Compaction).
+  if (opts.uebergabeVon) await uebernehmeOffeneAnforderungen(session, opts.uebergabeVon)
+
+  if (!starteProzess(session, args)) return state
+  push(session, { agent: 'system', kind: 'system', text: `Arbeitsverzeichnis: ${arbeitsdir(state)}` })
+
+  // Der Prompt geht unverändert als erste Nachricht in den Stream-Input —
+  // die Delegations-Regeln stehen im Systemprompt, nicht in der Nachricht.
+  sendMessage(id, opts.prompt)
 
   return state
+}
+
+/** Übernimmt die offenen Einträge einer früheren Session als Startliste der
+ *  neuen. Quelle ist der SERVERSEITIGE Stand der alten Session — nicht die
+ *  Datei, in der das Modell schreiben durfte. */
+async function uebernehmeOffeneAnforderungen(s: Session, vonId: string) {
+  // vonId kommt aus dem Request-Body und wird Teil eines Dateipfads.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vonId)) return
+  try {
+    let alteListe = registry.get(vonId)?.state.anforderungen
+    if (!alteListe) {
+      const roh = JSON.parse(await fs.readFile(path.join(RUNS_DIR, `${vonId}.json`), 'utf8')) as SessionState
+      alteListe = Array.isArray(roh?.anforderungen) ? roh.anforderungen : []
+    }
+    const offene = alteListe.filter((a) => a.status === 'offen' && typeof a.text === 'string')
+    if (!offene.length) return
+    const liste: Anforderung[] = offene.map((a, i) => ({
+      id: `a${i + 1}`,
+      t: now(),
+      text: a.text,
+      status: 'offen',
+      notiz: `übernommen aus Session ${vonId.slice(0, 8)}`,
+    }))
+    s.state.anforderungen = liste
+    await schreibeAnforderungen(s)
+    push(s, {
+      agent: 'system',
+      kind: 'system',
+      text: `Übergabe: ${liste.length} offene Anforderung(en) aus Session ${vonId.slice(0, 8)} übernommen`,
+    })
+  } catch {
+    /* Übergabe ist ein Extra */
+  }
 }
 
 /** Startet den CLI-Prozess und hängt die Ereignisverarbeitung daran.
@@ -348,7 +539,7 @@ function starteProzess(session: Session, args: string[]): boolean {
   let child: ChildProcessWithoutNullStreams
   try {
     child = spawn(CLAUDE_BIN, args, {
-      cwd: state.project,
+      cwd: arbeitsdir(state),
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
@@ -407,7 +598,18 @@ function starteProzess(session: Session, args: string[]): boolean {
       if (n.id === 'orchestrator' || n.status !== 'running' || n.quelle === 'rollenlauf') continue
       setNode(session, n.id, { status: 'error', phase: 'ohne Rückmeldung beendet', endedAt: now() })
     }
+    const offeneAnf = state.anforderungen.filter((a) => a.status === 'offen').length
+    if (offeneAnf) {
+      push(session, {
+        agent: 'system',
+        kind: 'error',
+        text: `Laut Anforderungsliste noch ${offeneAnf} Eintrag/Einträge offen — vor dem Abhaken prüfen.`,
+      })
+    }
     push(session, { agent: 'system', kind: 'result', text: `Prozess beendet (Code ${code})` })
+    // Nur bei bewusstem Ende aufräumen — eine unterbrochene Session soll
+    // ihren Worktree für --resume behalten.
+    if (state.status === 'fertig' || state.status === 'abgebrochen') void raeumeWorktreeAuf(session)
     void persist(session)
     emit(session, 'state', state)
     emit(session, 'end', { id: state.id })
@@ -439,6 +641,8 @@ export async function reconfigureSession(
 
   s.state.model = model
   s.state.skipPermissions = skipPermissions
+  // Der neue Prozess zählt seine Kosten wieder von null.
+  s.kostenBasisUsd = s.state.kostenUsd
   push(s, {
     agent: 'system',
     kind: 'system',
@@ -446,7 +650,7 @@ export async function reconfigureSession(
   })
 
   const args = [
-    ...buildArgs({ model, skipPermissions, roles: s.state.roles }),
+    ...buildArgs({ model, skipPermissions, roles: s.state.roles, anforderungenDatei: anforderungenDatei(id) }),
     '--resume',
     s.state.claudeSessionId,
   ]
@@ -463,11 +667,19 @@ function handleEvent(s: Session, ev: any) {
     if (ev.session_id) state.claudeSessionId = ev.session_id
     if (ev.subtype === 'init') {
       setNode(s, 'orchestrator', { phase: 'Kontext geladen' })
-      push(s, {
-        agent: 'orchestrator',
-        kind: 'system',
-        text: `Session ${String(ev.session_id ?? '').slice(0, 8)} · Modell ${ev.model ?? state.model}`,
-      })
+      // Kontext-Parität sichtbar machen: was die Headless-Session wirklich
+      // geladen hat. „Schlechter als interaktiv" heißt oft nur: anderer
+      // Kontext — das soll hier auffallen, nicht erst am Ergebnis.
+      const teile = [
+        `Session ${String(ev.session_id ?? '').slice(0, 8)}`,
+        `Modell ${ev.model ?? state.model}`,
+        Array.isArray(ev.tools) ? `${ev.tools.length} Tools` : null,
+        Array.isArray(ev.agents) ? `${ev.agents.length} Subagenten` : null,
+        Array.isArray(ev.slash_commands) ? `${ev.slash_commands.length} Skills/Befehle` : null,
+        ev.permissionMode ? `Permissions ${ev.permissionMode}` : null,
+        ev.cwd ? `cwd ${String(ev.cwd).replace(HOME, '~')}` : null,
+      ].filter(Boolean)
+      push(s, { agent: 'orchestrator', kind: 'system', text: teile.join(' · ') })
     }
     return
   }
@@ -502,6 +714,7 @@ function handleEvent(s: Session, ev: any) {
         cached: state.tokensCached,
         cacheWrite: state.tokensCacheWrite,
         anfragen: state.anfragen,
+        kosten: state.kostenUsd,
       })
     }
     const content = ev.message?.content
@@ -541,7 +754,10 @@ function handleEvent(s: Session, ev: any) {
       if (block?.type === 'tool_use') {
         const name = String(block.name)
         if (name === 'Agent' || name === 'Task') {
-          const role = String(block.input?.subagent_type ?? 'allgemein')
+          // subagent_type ist modellgesteuert und wird zum Knoten-Namen und
+          // Berichts-Dateinamen — alles Unerwartete wird zusammengefasst.
+          const roleRoh = String(block.input?.subagent_type ?? 'allgemein')
+          const role = ROLLENNAME.test(roleRoh) ? roleRoh : 'allgemein'
           const desc = String(block.input?.description ?? block.input?.prompt ?? '').slice(0, 90)
           if (block.id) s.pendingAgents.set(String(block.id), role)
           const n = node(s, role)
@@ -605,6 +821,10 @@ function handleEvent(s: Session, ev: any) {
 
   if (ev.type === 'result') {
     const usage = ev.usage
+    // total_cost_usd zählt je Prozess kumulativ — Basis addieren, nicht aufsummieren.
+    if (typeof ev.total_cost_usd === 'number') {
+      state.kostenUsd = s.kostenBasisUsd + ev.total_cost_usd
+    }
     if (usage) {
       state.tokensOut = Math.max(state.tokensOut, usage.output_tokens ?? 0)
       emit(s, 'tokens', {
@@ -613,6 +833,7 @@ function handleEvent(s: Session, ev: any) {
         cached: state.tokensCached,
         cacheWrite: state.tokensCacheWrite,
         anfragen: state.anfragen,
+        kosten: state.kostenUsd,
       })
     }
     push(s, {
@@ -635,12 +856,18 @@ function handleEvent(s: Session, ev: any) {
       setNode(s, n.id, { status: 'done', phase: 'zurückgemeldet', endedAt: now() })
     }
     setNode(s, 'orchestrator', { phase: 'Antwort abgeschlossen' })
+    // Der Orchestrator kann in dieser Runde Status in der Liste gepflegt haben.
+    void aktualisiereAnforderungen(s)
+    // Kein Vorwurf mehr, wenn der Orchestrator nicht delegiert hat — das ist
+    // jetzt der Normalfall. Reviews holt der Rollenlauf, das UI bietet ihn an.
+    // Nur ein GERADE laufender Rollenlauf unterdrückt den Hinweis: ein
+    // vergangener sagt nichts über die Änderungen dieser Runde.
     const delegiert = state.nodes.some((n) => n.id !== 'orchestrator' && n.calls > 0)
-    if (state.roles.length && !delegiert) {
+    if (state.roles.length && !delegiert && !state.pipelineAktiv) {
       push(s, {
         agent: 'system',
-        kind: 'error',
-        text: 'Runde beendet, ohne eine einzige Rolle zu beauftragen — Review steht aus.',
+        kind: 'system',
+        text: 'Runde beendet — Review über den Rollenlauf steht noch aus.',
       })
     }
     emit(s, 'state', state)
@@ -666,7 +893,64 @@ export function sendMessage(id: string, text: string): boolean {
   }
   s.child.stdin.write(JSON.stringify(msg) + '\n')
   push(s, { agent: 'du', kind: 'system', text })
+  // Jede Nutzer-Nachricht wird deterministisch zur Anforderung — die
+  // Einordnung (verworfen bei „ja bitte") ist Sache des Orchestrators.
+  void ergaenzeAnforderung(s, text)
   return true
+}
+
+/** Ablageort der Anforderungsliste — die Datei, die der Orchestrator liest
+ *  und pflegt. Absoluter Pfad, weil die Session im Projektordner läuft. */
+export function anforderungenDatei(id: string): string {
+  return path.join(ANFORDERUNGEN_DIR, `${id}.json`)
+}
+
+const ANF_STATUS = new Set(['offen', 'erledigt', 'verworfen'])
+
+/** Übernimmt aus der Datei NUR status und notiz zu Einträgen, die der Server
+ *  kennt. Die Einträge selbst führt die Konsole — der Prompt verbietet dem
+ *  Modell zwar mehr, aber verlassen wird sich darauf nicht: sonst überlebt
+ *  eine aus Repo-Inhalten injizierte „Anforderung" den Kontext-Reset. */
+async function mergeAnforderungenVonDatei(s: Session) {
+  let roh: unknown
+  try {
+    roh = JSON.parse(await fs.readFile(anforderungenDatei(s.state.id), 'utf8'))
+  } catch {
+    return
+  }
+  if (!Array.isArray(roh)) return
+  for (const e of s.state.anforderungen) {
+    const f = (roh as Array<Record<string, unknown>>).find((x) => x && x.id === e.id)
+    if (!f) continue
+    if (typeof f.status === 'string' && ANF_STATUS.has(f.status)) e.status = f.status as Anforderung['status']
+    if (typeof f.notiz === 'string') e.notiz = f.notiz.slice(0, 300)
+  }
+}
+
+async function schreibeAnforderungen(s: Session) {
+  await fs.mkdir(ANFORDERUNGEN_DIR, { recursive: true })
+  await fs.writeFile(anforderungenDatei(s.state.id), JSON.stringify(s.state.anforderungen, null, 2), 'utf8')
+}
+
+/** Erst die Status-Pflege des Orchestrators einsammeln, dann anhängen und
+ *  die kanonische Liste zurückschreiben. */
+async function ergaenzeAnforderung(s: Session, text: string) {
+  try {
+    await mergeAnforderungenVonDatei(s)
+    s.state.anforderungen.push({ id: `a${s.state.anforderungen.length + 1}`, t: now(), text, status: 'offen' })
+    await schreibeAnforderungen(s)
+    emit(s, 'anforderungen', s.state.anforderungen)
+    planeAblage(s)
+  } catch {
+    /* Liste ist ein Extra — ein Fehler hier darf die Nachricht nicht kippen */
+  }
+}
+
+/** Nach jeder Runde: Status-Änderungen des Orchestrators übernehmen. */
+async function aktualisiereAnforderungen(s: Session) {
+  await mergeAnforderungenVonDatei(s)
+  emit(s, 'anforderungen', s.state.anforderungen)
+  planeAblage(s)
 }
 
 /** Beendet einen Prozess höflich und fasst nach der Frist hart nach. */
@@ -717,6 +1001,17 @@ async function abgelegteSessions(): Promise<SessionState[]> {
         roh.status = roh.claudeSessionId ? 'unterbrochen' : 'abgebrochen'
       }
       roh.pipelineAktiv = false
+      roh.skipPermissions = Boolean(roh.skipPermissions)
+      // Läufe aus der Zeit vor Kostenerfassung, Verdict-JSON und Liste.
+      roh.kostenUsd ??= 0
+      roh.anforderungen ??= []
+      roh.worktreePath ??= null
+      roh.worktreeBasis ??= null
+      for (const n of roh.nodes ?? []) {
+        n.kostenUsd ??= 0
+        n.befunde ??= null
+        n.nachpruefungen ??= 0
+      }
       out.push(roh)
     } catch {
       /* unlesbare Ablage überspringen */
@@ -743,10 +1038,20 @@ export async function resumeSession(id: string): Promise<{ ok: boolean; error?: 
   const alt = (await abgelegteSessions()).find((s) => s.id === id)
   if (!alt) return { ok: false, error: 'Lauf nicht in der Ablage gefunden' }
   if (!alt.claudeSessionId) return { ok: false, error: 'Dieser Lauf hat keine Claude-Kennung — er lässt sich nicht fortsetzen' }
+  // Die Ablage ist eine Datei, in die theoretisch auch eine (permissive)
+  // Session schreiben konnte — Pfade daraus werden deshalb nicht geglaubt,
+  // sondern gegen die konfigurierten Wurzeln geprüft, bevor sie cwd werden.
+  const projektErlaubt = PROJECT_ROOTS.some(
+    (wurzel) => alt.project === wurzel || alt.project.startsWith(wurzel + path.sep),
+  )
+  const worktreeErlaubt = !alt.worktreePath || alt.worktreePath.startsWith(WORKTREES_DIR + path.sep)
+  if (!projektErlaubt || !worktreeErlaubt) {
+    return { ok: false, error: 'Ablage verweist auf ein Arbeitsverzeichnis außerhalb der erlaubten Wurzeln — Fortsetzen verweigert.' }
+  }
   try {
-    await fs.stat(alt.project)
+    await fs.stat(alt.worktreePath ?? alt.project)
   } catch {
-    return { ok: false, error: `Projektordner fehlt: ${alt.project}` }
+    return { ok: false, error: `Arbeitsverzeichnis fehlt: ${alt.worktreePath ?? alt.project}` }
   }
 
   const claudeSessionId = alt.claudeSessionId
@@ -764,11 +1069,17 @@ export async function resumeSession(id: string): Promise<{ ok: boolean; error?: 
     rollenProzesse: new Map(),
     zuletztAbgelegt: 0,
     ablageGeplant: false,
+    kostenBasisUsd: state.kostenUsd,
   }
   registry.set(id, session)
 
   const args = [
-    ...buildArgs({ model: state.model, skipPermissions: state.skipPermissions, roles: state.roles }),
+    ...buildArgs({
+      model: state.model,
+      skipPermissions: state.skipPermissions,
+      roles: state.roles,
+      anforderungenDatei: anforderungenDatei(id),
+    }),
     '--resume',
     claudeSessionId,
   ]
@@ -798,6 +1109,9 @@ export function subscribe(id: string, send: (chunk: string) => void): (() => voi
  *  Interessante und war bisher nach dem Lauf verloren. */
 async function schreibeRollenbericht(s: Session, rolle: string, text: string) {
   if (!text.trim()) return
+  // Der Rollenname wird Teil des Dateipfads — hier ist die letzte Stelle,
+  // an der ein präparierter Name (../../…) noch abgefangen werden kann.
+  if (!ROLLENNAME.test(rolle)) return
   try {
     await fs.mkdir(REPORTS_DIR, { recursive: true })
     const datei = path.join(REPORTS_DIR, `${s.state.id}-${rolle}.md`)
@@ -859,9 +1173,65 @@ export const PRUEFAUFTRAG = [
   'Prüfe ausschließlich die uncommitteten Änderungen in diesem Projekt.',
   'Ermittle sie selbst mit `git diff HEAD` sowie `git status --porcelain` für neue Dateien.',
   'Lies nur die Dateien, die im Diff vorkommen — nicht die ganze Codebasis.',
-  'Antworte kompakt nach deinem Rollen-Ausgabeformat. Wenn nichts zu beanstanden ist,',
-  'sag das in einem Satz. Nimm keine Änderungen vor.',
+  'Dein Ergebnis wird als strukturiertes JSON erfasst (Schema ist vorgegeben):',
+  'Befunde ab Schweregrad Mittel, je Befund Datei, Zeile, Titel und 1–2 Sätze Beschreibung.',
+  'Wenn nichts zu beanstanden ist: verdict "ok" mit leerer Befundliste. Nimm keine Änderungen vor.',
 ].join(' ')
+
+/** Schema für das Review-Ergebnis eines Rollenlaufs. Erzwingt Struktur, damit
+ *  Code — nicht das Modell — über Terminierung und Anzeige entscheidet. */
+export const VERDICT_SCHEMA = {
+  type: 'object',
+  properties: {
+    verdict: { type: 'string', enum: ['ok', 'befunde'] },
+    befunde: {
+      type: 'array',
+      maxItems: 10,
+      items: {
+        type: 'object',
+        properties: {
+          schweregrad: { type: 'string', enum: ['kritisch', 'hoch', 'mittel', 'niedrig'] },
+          datei: { type: 'string' },
+          zeile: { type: ['integer', 'null'] },
+          titel: { type: 'string' },
+          beschreibung: { type: 'string' },
+          status: { type: 'string', enum: ['neu', 'offen', 'behoben'] },
+        },
+        required: ['schweregrad', 'datei', 'titel', 'beschreibung'],
+        additionalProperties: false,
+      },
+    },
+    zusammenfassung: { type: 'string' },
+  },
+  required: ['verdict', 'befunde'],
+  additionalProperties: false,
+} as const
+
+/** Macht aus dem Verdict-JSON den lesbaren Bericht für Anzeige und Ablage. */
+export function verdictAlsText(v: RollenVerdict): string {
+  if (v.verdict === 'ok' || !v.befunde.length) {
+    return `Verdict: ok — ${v.zusammenfassung ?? 'keine Befunde ab Schweregrad Mittel.'}`
+  }
+  const zeilen = v.befunde.map((b) => {
+    const ort = b.zeile ? `${b.datei}:${b.zeile}` : b.datei
+    const status = b.status && b.status !== 'neu' ? ` (${b.status})` : ''
+    return `- [${b.schweregrad}]${status} ${ort} — ${b.titel}: ${b.beschreibung}`
+  })
+  const kopf = v.zusammenfassung ? `${v.zusammenfassung}\n\n` : ''
+  return `${kopf}${zeilen.join('\n')}`
+}
+
+/** Einzeiler für den Knoten: Verdict plus Zählung statt der ersten Textzeilen. */
+export function verdictKurz(v: RollenVerdict): string {
+  if (v.verdict === 'ok' || !v.befunde.length) return '✓ ok — keine Befunde'
+  const behoben = v.befunde.filter((b) => b.status === 'behoben').length
+  const offen = v.befunde.length - behoben
+  const schwer = v.befunde.filter((b) => b.status !== 'behoben' && (b.schweregrad === 'kritisch' || b.schweregrad === 'hoch')).length
+  const teile = [`${offen} Befund(e)`]
+  if (schwer) teile.push(`davon ${schwer} hoch/kritisch`)
+  if (behoben) teile.push(`${behoben} behoben`)
+  return teile.join(' · ')
+}
 
 /** Derselbe Auftrag, wenn der Arbeitsstand unten schon angehängt ist. Ohne
  *  diese Fassung würde jede Rolle die Ermittlung trotzdem selbst ausführen —
@@ -870,18 +1240,19 @@ const PRUEFAUFTRAG_MIT_STAND = [
   'Prüfe ausschließlich die unten angehängten uncommitteten Änderungen dieses Projekts.',
   'Der Stand ist vollständig beigelegt — ermittle ihn NICHT noch einmal selbst.',
   'Lies eine Datei nur dann nach, wenn der beigelegte Ausschnitt für die Beurteilung nicht reicht.',
-  'Antworte kompakt nach deinem Rollen-Ausgabeformat. Wenn nichts zu beanstanden ist,',
-  'sag das in einem Satz. Nimm keine Änderungen vor.',
+  'Dein Ergebnis wird als strukturiertes JSON erfasst (Schema ist vorgegeben):',
+  'Befunde ab Schweregrad Mittel, je Befund Datei, Zeile, Titel und 1–2 Sätze Beschreibung.',
+  'Wenn nichts zu beanstanden ist: verdict "ok" mit leerer Befundliste. Nimm keine Änderungen vor.',
 ].join(' ')
 
 /** Auftrag für die Nachprüfung: die Rolle kennt ihre Befunde schon — sie soll
  *  nur abhaken statt den ganzen Diff noch einmal von vorn zu reviewen. */
 const NACHPRUEFUNGS_AUFTRAG = [
-  'NACHPRÜFUNG: Unten stehen deine Befunde aus dem letzten Lauf und der aktuelle Arbeitsstand.',
-  'Prüfe ausschließlich: (1) Welche deiner Befunde sind jetzt behoben, welche offen? (2) Neue',
-  'Befunde nur an den seither geänderten Stellen. Antworte als kurze Liste — je Altbefund',
-  '„behoben" oder „offen" mit einem Halbsatz, neue Befunde in deinem Rollen-Ausgabeformat.',
-  'Wiederhole den alten Bericht nicht. Nimm keine Änderungen vor.',
+  'NACHPRÜFUNG: Unten stehen deine Befunde aus dem letzten Lauf (als JSON) und der aktuelle',
+  'Arbeitsstand. Prüfe ausschließlich: (1) Je Altbefund — behoben oder offen? Gib ihn mit',
+  'status "behoben" bzw. "offen" wieder. (2) Neue Befunde (status "neu") nur an den seither',
+  'geänderten Stellen. Dein Ergebnis wird als strukturiertes JSON erfasst (Schema ist',
+  'vorgegeben). Nimm keine Änderungen vor.',
 ].join(' ')
 
 export interface Arbeitsstand {
@@ -950,9 +1321,12 @@ async function sammleArbeitsstand(project: string): Promise<Arbeitsstand | null>
 
 interface RollenErgebnis {
   text: string
+  /** Validiertes Verdict-JSON, wenn die Rolle mit Schema lief. */
+  struktur: RollenVerdict | null
   tokensIn: number
   tokensOut: number
   anfragen: number
+  kostenUsd: number
   status: 'done' | 'error' | 'timeout'
   fehler: string | null
 }
@@ -965,12 +1339,16 @@ async function laufeRolle(
   rolle: string,
   model: string | null,
   auftrag: string,
+  schema?: object,
 ): Promise<RollenErgebnis> {
   const args = ['-p', '--output-format', 'stream-json', '--verbose', '--agent', rolle]
   // Ohne --model nimmt die CLI das `model:` aus der Rollendatei. Der
   // security-reviewer läuft damit auf Opus, die übrigen auf Sonnet — statt
   // alle über einen Kamm zu scheren.
   if (model) args.push('--model', model)
+  // Erzwingt ein validiertes Verdict-JSON — die CLI wiederholt bei
+  // Schema-Verstoß selbst, der Parser hier bleibt trivial.
+  if (schema) args.push('--json-schema', JSON.stringify(schema))
   args.push('--autocompact', AUTOCOMPACT)
   if (s.state.skipPermissions) args.push('--dangerously-skip-permissions')
   // `--` beendet das Options-Parsing der CLI, damit ein Auftrag, der mit
@@ -980,9 +1358,11 @@ async function laufeRolle(
 
   return new Promise((resolve) => {
     let text = ''
+    let struktur: RollenVerdict | null = null
     let tokensIn = 0
     let tokensOut = 0
     let anfragen = 0
+    let kostenUsd = 0
     let puffer = ''
     let fehlerText = ''
     let abgelaufen = false
@@ -991,7 +1371,7 @@ async function laufeRolle(
     let child: ChildProcessWithoutNullStreams
     try {
       child = spawn(CLAUDE_BIN, args, {
-        cwd: s.state.project,
+        cwd: arbeitsdir(s.state),
         // Das Security-Gate ist ein Stop-Hook, der JEDE Session auffordert,
         // den security-reviewer über das Agent-Tool zu starten. Eine Rolle
         // hat dieses Werkzeug nicht — sie verschwendet damit nur Runden, um
@@ -999,7 +1379,7 @@ async function laufeRolle(
         env: { ...process.env, SECURITY_REVIEW_GATE: 'off' },
       })
     } catch (err) {
-      resolve({ text: '', tokensIn: 0, tokensOut: 0, anfragen: 0, status: 'error', fehler: String(err) })
+      resolve({ text: '', struktur: null, tokensIn: 0, tokensOut: 0, anfragen: 0, kostenUsd: 0, status: 'error', fehler: String(err) })
       return
     }
     s.rollenProzesse.set(rolle, child)
@@ -1021,7 +1401,7 @@ async function laufeRolle(
       fertig = true
       if (uhr) clearTimeout(uhr)
       s.rollenProzesse.delete(rolle)
-      resolve({ text, tokensIn, tokensOut, anfragen, status, fehler })
+      resolve({ text, struktur, tokensIn, tokensOut, anfragen, kostenUsd, status, fehler })
     }
 
     child.stdout.setEncoding('utf8')
@@ -1047,6 +1427,12 @@ async function laufeRolle(
               }
             }
             setNode(s, rolle, { tokensIn, tokensOut, anfragen })
+          }
+          if (ev.type === 'result') {
+            if (typeof ev.total_cost_usd === 'number') kostenUsd = ev.total_cost_usd
+            if (schema && ev.structured_output && Array.isArray(ev.structured_output.befunde)) {
+              struktur = ev.structured_output as RollenVerdict
+            }
           }
         } catch {
           /* Zeile überspringen */
@@ -1080,12 +1466,15 @@ export async function runPipeline(
   if (!s) return { ok: false, error: 'Session unbekannt' }
   if (s.pipelineLaeuft) return { ok: false, error: 'Es läuft bereits ein Rollenlauf' }
   if (!rollen.length) return { ok: false, error: 'Keine Rolle gewählt' }
+  // Rollennamen kommen aus dem Request-Body und landen in --agent und in
+  // Dateipfaden — nichts außerhalb des Musters wird gestartet.
+  if (rollen.some((r) => !ROLLENNAME.test(r))) return { ok: false, error: 'Ungültiger Rollenname' }
 
   // `auto` (Standard) heißt: kein --model, die Rollendatei entscheidet.
   const gewaehltesModell = opts.model && opts.model !== 'auto' ? opts.model : null
   const eigenerAuftrag = (opts.auftrag ?? '').trim()
 
-  const stand = opts.stand === false ? null : await sammleArbeitsstand(s.state.project)
+  const stand = opts.stand === false ? null : await sammleArbeitsstand(arbeitsdir(s.state))
   if (!eigenerAuftrag && stand && stand.dateien === 0) {
     return { ok: false, error: 'Keine uncommitteten Änderungen — es gibt nichts zu prüfen.' }
   }
@@ -1121,14 +1510,34 @@ export async function runPipeline(
 
   // Nachprüfung statt Voll-Review: Wer in dieser Session schon einmal über
   // den Stand gelaufen ist, bekommt seine Befunde und den Folge-Diff — nicht
-  // noch einmal den Komplettauftrag.
+  // noch einmal den Komplettauftrag. Grundlage ist das Verdict-JSON; der
+  // Freitext ist nur Rückfall für Läufe aus der Zeit davor.
   const vorbefunde = new Map<string, string>()
   if (!eigenerAuftrag && stand?.text) {
     for (const n of s.state.nodes) {
-      if (n.quelle === 'rollenlauf' && n.status === 'done' && n.volltext.trim() && aktiveRollen.includes(n.id)) {
-        vorbefunde.set(n.id, n.volltext)
-      }
+      if (n.quelle !== 'rollenlauf' || n.status !== 'done' || !aktiveRollen.includes(n.id)) continue
+      if (n.befunde) vorbefunde.set(n.id, JSON.stringify(n.befunde, null, 1))
+      else if (n.volltext.trim()) vorbefunde.set(n.id, n.volltext)
     }
+  }
+
+  // Iterations-Grenze: nach zwei Nachprüfungen entscheidet nicht noch eine
+  // dritte Runde, sondern ein Mensch. Sonst ist das wieder die Dauerschleife.
+  const MAX_NACHPRUEFUNGEN = 2
+  for (const rolle of [...aktiveRollen]) {
+    const n = s.state.nodes.find((x) => x.id === rolle)
+    if (vorbefunde.has(rolle) && n && n.nachpruefungen >= MAX_NACHPRUEFUNGEN) {
+      aktiveRollen = aktiveRollen.filter((r) => r !== rolle)
+      push(s, {
+        agent: rolle,
+        kind: 'error',
+        text: `Iterations-Grenze: ${MAX_NACHPRUEFUNGEN} Nachprüfungen gelaufen — offene Befunde gehören jetzt an den Menschen.`,
+      })
+      setNode(s, rolle, { phase: 'Iterations-Grenze · Befunde an den Menschen' })
+    }
+  }
+  if (!aktiveRollen.length) {
+    return { ok: false, error: 'Keine Rolle mehr übrig — Iterations-Grenze erreicht, die offenen Befunde gehören an den Menschen.' }
   }
   const auftragFuer = (rolle: string): { text: string; anzeige: string; nachpruefung: boolean } => {
     const vor = vorbefunde.get(rolle)
@@ -1218,39 +1627,56 @@ export async function runPipeline(
         text: a.nachpruefung ? 'Nachprüfung der eigenen Befunde' : `Rollenlauf: ${grundauftrag.slice(0, 90)}`,
       })
 
-      const r = await laufeRolle(s, rolle, gewaehltesModell, a.text)
+      // Schema nur beim Standard-Prüfauftrag — ein freier Auftrag darf Prosa
+      // liefern.
+      const r = await laufeRolle(s, rolle, gewaehltesModell, a.text, eigenerAuftrag ? undefined : VERDICT_SCHEMA)
       s.state.tokensOut += r.tokensOut
       s.state.tokensIn += r.tokensIn
       s.state.anfragen += r.anfragen
+      // Rollenkosten in Basis UND Stand: das nächste result-Event des
+      // Orchestrators rechnet „Basis + eigener Prozess" und würde sie sonst
+      // wieder überschreiben.
+      s.kostenBasisUsd += r.kostenUsd
+      s.state.kostenUsd += r.kostenUsd
       emit(s, 'tokens', {
         in: s.state.tokensIn,
         out: s.state.tokensOut,
         cached: s.state.tokensCached,
         cacheWrite: s.state.tokensCacheWrite,
         anfragen: s.state.anfragen,
+        kosten: s.state.kostenUsd,
       })
 
-      const ergebnis = r.text
-        .split('\n')
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .slice(0, 3)
-        .join(' · ')
-        .slice(0, 300)
+      const volltext = r.struktur ? verdictAlsText(r.struktur) : r.text
+      const ergebnis = r.struktur
+        ? verdictKurz(r.struktur)
+        : volltext
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .slice(0, 3)
+            .join(' · ')
+            .slice(0, 300)
 
+      const knoten = node(s, rolle)
       setNode(s, rolle, {
         status: r.status === 'done' ? 'done' : r.status,
         phase: r.status === 'done' ? 'zurückgemeldet' : r.status === 'timeout' ? 'Zeitgrenze' : 'Fehler',
         ergebnis: ergebnis || (r.fehler ?? ''),
-        volltext: r.text,
+        volltext,
         tokensIn: r.tokensIn,
         tokensOut: r.tokensOut,
         anfragen: r.anfragen,
+        kostenUsd: r.kostenUsd,
         endedAt: now(),
+        // Verdict-Basis nur überschreiben, wenn dieser Lauf eine geliefert
+        // hat — ein freier Auftrag löscht die Nachprüfungs-Grundlage nicht.
+        ...(r.struktur ? { befunde: r.struktur.befunde } : {}),
+        ...(a.nachpruefung && r.status === 'done' ? { nachpruefungen: knoten.nachpruefungen + 1 } : {}),
       })
-      if (r.text.trim()) {
-        await schreibeRollenbericht(s, rolle, r.text)
-        const eintrag = { t: now(), text: `## ${rolle}\n\n${r.text}` }
+      if (volltext.trim()) {
+        await schreibeRollenbericht(s, rolle, volltext)
+        const eintrag = { t: now(), text: `## ${rolle}\n\n${volltext}` }
         s.state.antworten.push(eintrag)
         emit(s, 'antwort', eintrag)
       }
@@ -1283,7 +1709,7 @@ export async function runPipeline(
     try {
       await execFile(
         path.join(HOME, '.claude', 'scripts', 'security-review-gate.sh'),
-        ['mark', s.state.project, s.state.claudeSessionId],
+        ['mark', arbeitsdir(s.state), s.state.claudeSessionId],
         { timeout: 20000 },
       )
       push(s, {
