@@ -1,4 +1,34 @@
 export type NodeStatus = 'idle' | 'running' | 'done' | 'error' | 'timeout'
+export type ExecutionMode = 'direct' | 'verified' | 'parallel'
+export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultracode'
+
+export interface ProjectIntelligence {
+  claudeMd: string[]
+  settings: string[]
+  agents: string[]
+  skills: string[]
+  workflows: string[]
+  checks: string[]
+  warnings: string[]
+}
+
+export interface CheckResult {
+  name: string
+  command: string
+  status: 'passed' | 'failed' | 'skipped'
+  durationMs: number
+  output: string
+}
+
+export interface VerificationState {
+  status: 'idle' | 'checking' | 'reviewing' | 'passed' | 'findings' | 'failed' | 'skipped'
+  risk: 'low' | 'medium' | 'high'
+  reasons: string[]
+  focuses: string[]
+  checks: CheckResult[]
+  fingerprint: string | null
+  updatedAt: string | null
+}
 
 export interface Anforderung {
   id: string
@@ -56,6 +86,8 @@ export interface SessionState {
   claudeSessionId: string | null
   project: string
   model: string
+  mode?: ExecutionMode
+  effort?: EffortLevel
   roles: string[]
   prompt: string
   skipPermissions: boolean
@@ -78,6 +110,7 @@ export interface SessionState {
   cli: string
   pipelineAktiv: boolean
   pipelineRollen: string[]
+  verification?: VerificationState
 }
 
 export interface Role {
@@ -86,6 +119,9 @@ export interface Role {
   model: string | null
   tools: string[]
   file: string
+  scope?: 'project' | 'user'
+  effort?: string | null
+  maxTurns?: number | null
 }
 
 export interface ProjectEntry {
@@ -95,6 +131,7 @@ export interface ProjectEntry {
   paths: string[]
   path: string
   git: boolean
+  intelligence?: ProjectIntelligence
 }
 
 export interface RunSummary {
@@ -141,7 +178,12 @@ export function fmtDuration(ms: number): string {
 export function fmtDate(iso: string, locale: string = 'de-DE'): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleString(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleString(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export function fmtTime(iso: string, locale: string = 'de-DE'): string {

@@ -143,6 +143,26 @@ export async function runRoleProcess(
   options: RoleProcessOptions = {}
 ): Promise<RollenErgebnis> {
   const args = ['-p', '--output-format', 'stream-json', '--verbose', '--agent', rolle]
+  if (rolle === 'change-verifier') {
+    args.push(
+      '--agents',
+      JSON.stringify({
+        'change-verifier': {
+          description: 'Unabhängige Verifikation eines abgeschlossenen Arbeitsstands',
+          prompt: [
+            'Du bist ein unabhängiger Change-Verifier. Versuche aktiv nachzuweisen, dass mindestens',
+            'eine Anforderung nicht erfüllt ist, eine Regression entstand oder die Prüfevidenz nicht',
+            'ausreicht. Prüfe ausschließlich den übergebenen Stand und notwendige direkte Abhängigkeiten.',
+            'Melde nur konkrete, reproduzierbare Befunde. Nimm keine Änderungen vor.',
+          ].join(' '),
+          tools: ['Read', 'Grep', 'Glob', 'Bash'],
+          model: model ?? 'sonnet',
+          effort: 'high',
+          maxTurns: 12,
+        },
+      })
+    )
+  }
   // Ohne --model nimmt die CLI das `model:` aus der Rollendatei. Der
   // security-reviewer läuft damit auf Opus, die übrigen auf Sonnet — statt
   // alle über einen Kamm zu scheren.

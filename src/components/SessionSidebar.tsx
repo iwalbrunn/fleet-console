@@ -1,7 +1,13 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { type ProjectEntry, type Role, type SessionState } from '@/lib/types'
+import {
+  type ExecutionMode,
+  type ProjectEntry,
+  type ProjectIntelligence,
+  type Role,
+  type SessionState,
+} from '@/lib/types'
 import { ROLE_ICONS } from '@/lib/roleIcons'
 
 function SwitchRow({
@@ -21,7 +27,10 @@ function SwitchRow({
     <button className="switchrow" onClick={onToggle}>
       <div>
         <div style={{ fontSize: 13 }}>{label}</div>
-        <div className={mono ? 'mono' : undefined} style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>
+        <div
+          className={mono ? 'mono' : undefined}
+          style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}
+        >
           {note}
         </div>
       </div>
@@ -48,6 +57,12 @@ export function SessionSidebar(props: {
   models: { id: string; label: string }[]
   model: string
   onModel: (id: string) => void
+  efforts: { id: string; label: string }[]
+  effort: string
+  onEffort: (id: string) => void
+  mode: ExecutionMode
+  onMode: (mode: ExecutionMode) => void
+  projectContext: ProjectIntelligence | null
   roles: Role[]
   picked: string[]
   onPicked: (roles: string[]) => void
@@ -64,13 +79,33 @@ export function SessionSidebar(props: {
 }) {
   const t = useTranslations()
   const {
-    session, prozessLebt, wartet, abweichung, error,
-    projects, projectId, project, models, model, roles, picked, prompt, skip, worktree, cliPreview,
+    session,
+    prozessLebt,
+    wartet,
+    abweichung,
+    error,
+    projects,
+    projectId,
+    project,
+    models,
+    model,
+    efforts,
+    effort,
+    mode,
+    projectContext,
+    roles,
+    picked,
+    prompt,
+    skip,
+    worktree,
+    cliPreview,
   } = props
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div className="kicker">{prozessLebt ? t('sidebar.runningSession') : t('sidebar.newSession')}</div>
+      <div className="kicker">
+        {prozessLebt ? t('sidebar.runningSession') : t('sidebar.newSession')}
+      </div>
 
       {/* Der Projektordner steht im Prozessaufruf und lässt sich nicht
           mehr ändern. Eine bedienbare Auswahl würde das Gegenteil
@@ -80,7 +115,13 @@ export function SessionSidebar(props: {
           <label>{t('sidebar.projectFixed')}</label>
           <div
             className="input"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--color-neutral-400)', cursor: 'default' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              color: 'var(--color-neutral-400)',
+              cursor: 'default',
+            }}
           >
             <i className="ph ph-lock-simple" style={{ fontSize: 13, flex: 'none' }} />
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -88,7 +129,15 @@ export function SessionSidebar(props: {
                 (session?.project ?? '').split('/').slice(-1)[0]}
             </span>
           </div>
-          <div className="mono" style={{ fontSize: 11, color: 'var(--color-neutral-600)', marginTop: 4, wordBreak: 'break-all' }}>
+          <div
+            className="mono"
+            style={{
+              fontSize: 11,
+              color: 'var(--color-neutral-600)',
+              marginTop: 4,
+              wordBreak: 'break-all',
+            }}
+          >
             {(session?.project ?? '').replace(/^\/Users\/[^/]+/, '~')}
           </div>
         </div>
@@ -136,7 +185,15 @@ export function SessionSidebar(props: {
               )
             }
             return (
-              <div className="mono" style={{ fontSize: 11, color: 'var(--color-neutral-600)', marginTop: 4, wordBreak: 'break-all' }}>
+              <div
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  color: 'var(--color-neutral-600)',
+                  marginTop: 4,
+                  wordBreak: 'break-all',
+                }}
+              >
                 {entry.path.replace(/^\/Users\/[^/]+/, '~')}
               </div>
             )
@@ -167,44 +224,138 @@ export function SessionSidebar(props: {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div style={{ fontSize: 12, color: 'var(--color-neutral-400)', marginBottom: 4 }}>{t('sidebar.rolesTitle')}</div>
-        {roles.length === 0 && (
-          <div style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}>{t('roles.noRolesFound')}</div>
-        )}
-        {roles.map((r) => {
-          const on = picked.includes(r.name)
-          const imLauf = Boolean(session && prozessLebt && session.roles.includes(r.name))
-          // Während eine Session läuft, ist die Liste reiner Zustand: was
-          // die Session mitbekommen hat, steht fest — Delegation steuert
-          // der Orchestrator bzw. der Rollenlauf, kein Klick von außen.
-          return (
-            <button
-              key={r.name}
-              className="rolerow"
-              disabled={prozessLebt}
-              style={prozessLebt ? { cursor: 'default', opacity: imLauf ? 0.85 : 0.5 } : undefined}
-              title={imLauf ? t('sidebar.roleLocked', { role: r.name }) : r.description}
-              onClick={() => {
-                if (prozessLebt) return
-                props.onPicked(on ? picked.filter((x) => x !== r.name) : [...picked, r.name])
-              }}
-            >
-              <span className="checkbox" data-on={on}>
-                {on && <i className="ph ph-check" style={{ fontSize: 10, color: 'var(--color-accent)' }} />}
-              </span>
-              <i
-                className={`ph ${ROLE_ICONS[r.name] ?? 'ph-robot'}`}
-                style={{ fontSize: 15, color: 'var(--color-neutral-400)' }}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div style={{ fontSize: 12, color: 'var(--color-neutral-400)' }}>{t('mode.title')}</div>
+        <div className="seg">
+          {(['direct', 'verified', 'parallel'] as ExecutionMode[]).map((value) => (
+            <label key={value} className="seg-opt" title={t(`mode.${value}Note`)}>
+              <input
+                type="radio"
+                name="mode"
+                checked={(prozessLebt ? session?.mode : mode) === value}
+                disabled={prozessLebt}
+                onChange={() => props.onMode(value)}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
               />
-              <span style={{ color: on ? 'var(--color-text)' : 'var(--color-neutral-400)', flex: 1 }}>{r.name}</span>
-              {imLauf && (
-                <i className="ph ph-lock-simple" style={{ fontSize: 11, color: 'var(--color-neutral-600)' }} />
-              )}
-            </button>
-          )
-        })}
+              {t(`mode.${value}`)}
+            </label>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--color-neutral-500)', lineHeight: 1.45 }}>
+          {t(`mode.${(prozessLebt ? session?.mode : mode) ?? 'direct'}Note`)}
+        </div>
       </div>
+
+      <div className="field">
+        <label>
+          {t('effort.title')}
+          {prozessLebt && (
+            <span style={{ color: 'var(--color-neutral-600)' }}> {t('sidebar.modelNote')}</span>
+          )}
+        </label>
+        <select
+          className="input"
+          value={mode === 'parallel' ? 'ultracode' : effort}
+          disabled={!prozessLebt && mode === 'parallel'}
+          onChange={(e) => props.onEffort(e.target.value)}
+        >
+          {mode === 'parallel' && <option value="ultracode">Ultracode · automatisch</option>}
+          {efforts.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {projectContext && (
+        <div className="codebox" style={{ fontFamily: 'var(--font-body)', lineHeight: 1.55 }}>
+          <div style={{ color: 'var(--color-neutral-300)', marginBottom: 3 }}>
+            {t('projectContext.title')}
+          </div>
+          <div>
+            CLAUDE.md: {projectContext.claudeMd.length ? '✓' : '—'} · Agents:{' '}
+            {projectContext.agents.length} · Skills: {projectContext.skills.length}
+          </div>
+          <div>
+            Workflows: {projectContext.workflows.length} · Checks: {projectContext.checks.length}
+          </div>
+          {projectContext.warnings.map((warning) => (
+            <div key={warning} style={{ color: 'var(--color-warn)' }}>
+              ! {warning}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <details>
+        <summary
+          style={{
+            fontSize: 12,
+            color: 'var(--color-neutral-400)',
+            cursor: 'pointer',
+            marginBottom: 5,
+          }}
+        >
+          {t('sidebar.rolesTitle')} · {picked.length}
+        </summary>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {roles.length === 0 && (
+            <div style={{ fontSize: 11.5, color: 'var(--color-neutral-500)' }}>
+              {t('roles.noRolesFound')}
+            </div>
+          )}
+          {roles.map((r) => {
+            const on = picked.includes(r.name)
+            const imLauf = Boolean(session && prozessLebt && session.roles.includes(r.name))
+            // Während eine Session läuft, ist die Liste reiner Zustand: was
+            // die Session mitbekommen hat, steht fest — Delegation steuert
+            // der Orchestrator bzw. der Rollenlauf, kein Klick von außen.
+            return (
+              <button
+                key={r.name}
+                className="rolerow"
+                disabled={prozessLebt}
+                style={
+                  prozessLebt ? { cursor: 'default', opacity: imLauf ? 0.85 : 0.5 } : undefined
+                }
+                title={imLauf ? t('sidebar.roleLocked', { role: r.name }) : r.description}
+                onClick={() => {
+                  if (prozessLebt) return
+                  props.onPicked(on ? picked.filter((x) => x !== r.name) : [...picked, r.name])
+                }}
+              >
+                <span className="checkbox" data-on={on}>
+                  {on && (
+                    <i
+                      className="ph ph-check"
+                      style={{ fontSize: 10, color: 'var(--color-accent)' }}
+                    />
+                  )}
+                </span>
+                <i
+                  className={`ph ${ROLE_ICONS[r.name] ?? 'ph-robot'}`}
+                  style={{ fontSize: 15, color: 'var(--color-neutral-400)' }}
+                />
+                <span
+                  style={{ color: on ? 'var(--color-text)' : 'var(--color-neutral-400)', flex: 1 }}
+                >
+                  {r.name}
+                </span>
+                <span style={{ fontSize: 10, color: 'var(--color-neutral-600)' }}>
+                  {r.scope === 'project' ? 'project' : 'user'}
+                </span>
+                {imLauf && (
+                  <i
+                    className="ph ph-lock-simple"
+                    style={{ fontSize: 11, color: 'var(--color-neutral-600)' }}
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </details>
 
       {prozessLebt && (
         <div style={{ fontSize: 11, color: 'var(--color-neutral-500)', lineHeight: 1.5 }}>
@@ -284,7 +435,11 @@ export function SessionSidebar(props: {
       {/* Solange eine Session lebt, gibt es hier nichts zu starten —
           der Knopf war nur ausgegraut und blieb trotzdem stehen. */}
       {!prozessLebt && (
-        <button className="btn btn-primary btn-block" onClick={props.onStart} disabled={!prompt.trim() || !project}>
+        <button
+          className="btn btn-primary btn-block"
+          onClick={props.onStart}
+          disabled={!prompt.trim() || !project}
+        >
           <i className="ph ph-play" />
           {t('session.start')}
         </button>

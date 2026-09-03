@@ -23,25 +23,43 @@ The implementation follows these boundaries:
 - `claude-process.ts` / `claude-events.ts` — child-process lifecycle and typed stream handling.
 - `session-requirements.ts`, `session-storage.ts`, `session-worktrees.ts` — filesystem and Git adapters.
 - `review-pipeline.ts` — diff collection, bounded parallel role runs and re-check termination.
+- `project-intelligence.ts` — discovers project-local Claude configuration and deterministic checks.
+- `verification.ts` — risk classification, checks and the independent universal verifier.
+
+## Fleet Console v2 execution policy
+
+The default orchestration unit is now one strong Claude Code session, not a
+fixed set of personas. Fleet has three modes:
+
+| Mode     | Orchestration                                     | Verification                               |
+| -------- | ------------------------------------------------- | ------------------------------------------ |
+| Direct   | Main session, focused native subagents on demand  | Recommended from diff risk                 |
+| Verified | Main session                                      | Automatic checks + fresh `change-verifier` |
+| Parallel | Native Claude Code Workflow runtime (`ultracode`) | Recommended after the workflow             |
+
+The legacy role pipeline is retained only as an explicit specialist tool. It
+is no longer the default quality mechanism. This keeps Fleet responsible for
+durable requirements, process lifecycle and independent evidence, while
+Claude Code owns dynamic decomposition and workflow scheduling.
 
 The most important consequence: **the login is inherited.** There is no API
 key and no separate billing. Runs count against the same quota as interactive
 work in the terminal.
 
-Second consequence: the console orchestrates *agents*, not *model calls*. Every
+Second consequence: the console orchestrates _agents_, not _model calls_. Every
 role is a complete Claude Code session with its own context window, working
 directory and process. Frameworks like CrewAI or LangGraph sit one layer below
 that and therefore solve a different problem.
 
 ## Two ways to involve a role
 
-|  | Agent tool | Role run |
-|---|---|---|
-| Who decides | the model | the console |
-| Process | inside the orchestrator's context | its own process |
-| Trigger | text in the system prompt | a button |
-| Reliable | no | yes |
-| Accounting | attributed via `parent_tool_use_id` | measured directly |
+|             | Agent tool                          | Role run          |
+| ----------- | ----------------------------------- | ----------------- |
+| Who decides | the model                           | the console       |
+| Process     | inside the orchestrator's context   | its own process   |
+| Trigger     | text in the system prompt           | a button          |
+| Reliable    | no                                  | yes               |
+| Accounting  | attributed via `parent_tool_use_id` | measured directly |
 
 The first path was the only one for a long time, and it is the sore point:
 whether a role gets involved is up to the model. A round could end without any
@@ -68,7 +86,7 @@ The role run is the answer to that. `src/lib/review-pipeline.ts` → `runPipelin
 
 When roles are selected, the session runs with `--forward-subagent-text`.
 Subagent events then arrive in the same stream, marked with
-`parent_tool_use_id`. Only with that is it visible *what* a role does while it
+`parent_tool_use_id`. Only with that is it visible _what_ a role does while it
 works — before, the time between delegation and reply was a black box in which
 the graph could only show "running".
 
@@ -88,7 +106,7 @@ sum fresh input, and show cache reads as a maximum next to it.
 
 ### The security stop hook fires inside role sessions too
 
-The hook asks *every* session to start the `security-reviewer` through the
+The hook asks _every_ session to start the `security-reviewer` through the
 Agent tool. A role does not have that tool and then burns turns explaining
 that it can't — measured at 4 requests instead of 2. Role runs therefore set
 `SECURITY_REVIEW_GATE=off`; the hook script provides that off switch itself.
@@ -233,7 +251,7 @@ Four mechanisms added in August 2026, all following the same principle:
   taken from the server-side state, not from the model-writable file. Full
   context reset instead of trusting compaction.
 - **Worktree isolation.** Optional per session: `git worktree add -b
-  fleet/<short>` under `~/.fleet-console/worktrees/` — deliberately outside
+fleet/<short>` under `~/.fleet-console/worktrees/` — deliberately outside
   `~/.claude`, because the worktree becomes the cwd of a possibly permissive
   session and has no business sitting next to `settings.json` and `agents/`.
   The session (and
@@ -289,8 +307,10 @@ Also deliberately absent:
   the officially supported way to inherit the subscription, so it stays. The
   SDK's key benefit, structured output, is available on the CLI as
   `--json-schema` anyway (used by role runs for verdict JSON).
-- **No Dynamic Workflows as the engine.** Saved workflows in
-  `.claude/workflows/` cannot be triggered headlessly from a server process
-  (they are invoked interactively via slash command or by the model itself).
-  The role run stays a thin CLI fan-out; workflow patterns worth keeping —
-  verdict schemas, iteration caps, cost accounting — are implemented directly.
+- **Native Dynamic Workflows for parallel implementation.** Parallel mode
+  starts with `--effort ultracode` and tells Claude to use the Workflow runtime
+  only for independently separable work. Headless sessions can execute the
+  Workflow tool when permissions allow it. Fleet observes the event stream;
+  it does not duplicate the workflow scheduler. Independent final verification
+  remains Fleet-owned because it combines server-owned requirements, local
+  checks and a fresh read-only process.

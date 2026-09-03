@@ -1,8 +1,10 @@
 import { execFile as execFileCb } from 'node:child_process'
 import fs from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { AGENTS_DIR, PROJECT_ROOTS, shortProjectName } from './config'
+import { inspectProject } from './project-intelligence'
 
 export interface Role {
   name: string
@@ -10,6 +12,9 @@ export interface Role {
   model: string | null
   tools: string[]
   file: string
+  scope?: 'project' | 'user'
+  effort?: string | null
+  maxTurns?: number | null
 }
 
 const ICONS: Record<string, string> = {
@@ -26,44 +31,102 @@ export function iconForRole(name: string): string {
   return ICONS[name] ?? 'ph-robot'
 }
 
-function frontmatter(raw: string): Record<string, string> {
+function frontmatter(raw: string): Record<string, string | string[]> {
   const m = raw.match(/^---\n([\s\S]*?)\n---/)
   if (!m) return {}
-  const out: Record<string, string> = {}
+  const out: Record<string, string | string[]> = {}
+  let listKey: string | null = null
   for (const line of m[1].split('\n')) {
+    const listItem = line.match(/^\s+-\s+(.+)$/)
+    if (listItem && listKey) {
+      const current = out[listKey]
+      out[listKey] = [...(Array.isArray(current) ? current : []), listItem[1].trim()]
+      continue
+    }
     const i = line.indexOf(':')
     if (i < 1 || /^\s/.test(line)) continue
-    out[line.slice(0, i).trim()] = line
-      .slice(i + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '')
+    const key = line.slice(0, i).trim()
+    const rawValue = line.slice(i + 1).trim()
+    if (!rawValue) {
+      out[key] = []
+      listKey = key
+      continue
+    }
+    listKey = null
+    const value = rawValue.trim().replace(/^["']|["']$/g, '')
+    out[key] =
+      value.startsWith('[') && value.endsWith(']')
+        ? value
+            .slice(1, -1)
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean)
+        : value
   }
   return out
 }
 
-export async function listRoles(): Promise<Role[]> {
-  let files: string[]
-  try {
-    files = (await fs.readdir(AGENTS_DIR)).filter((f) => f.endsWith('.md'))
-  } catch {
-    return []
+async function roleFiles(directory: string): Promise<string[]> {
+  const files: string[] = []
+  const walk = async (current: string) => {
+    let entries: Dirent[]
+    try {
+      entries = await fs.readdir(current, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name)
+      if (entry.isDirectory()) await walk(full)
+      else if (entry.name.endsWith('.md')) files.push(full)
+    }
   }
+  await walk(directory)
+  return files
+}
+
+async function readRoles(directory: string, scope: 'project' | 'user'): Promise<Role[]> {
   const roles: Role[] = []
-  for (const f of files) {
-    const file = path.join(AGENTS_DIR, f)
+  for (const file of await roleFiles(directory)) {
     try {
       const fm = frontmatter(await fs.readFile(file, 'utf8'))
+      const scalar = (key: string) => (typeof fm[key] === 'string' ? (fm[key] as string) : '')
+      const list = (key: string) => {
+        const value = fm[key]
+        return Array.isArray(value)
+          ? value
+          : typeof value === 'string'
+            ? value
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : []
+      }
       roles.push({
-        name: fm.name || path.basename(f, '.md'),
-        description: fm.description ?? '',
-        model: fm.model ?? null,
-        tools: (fm.tools ?? '').split(',').map((t) => t.trim()).filter(Boolean),
+        name: scalar('name') || path.basename(file, '.md'),
+        description: scalar('description'),
+        model: scalar('model') || null,
+        tools: list('tools'),
         file,
+        scope,
+        effort: scalar('effort') || null,
+        maxTurns: Number(scalar('maxTurns')) || null,
       })
     } catch {
       /* unlesbare Rolle überspringen */
     }
   }
+  return roles
+}
+
+/** Projektrollen haben dieselbe Priorität wie in Claude Code selbst: sie
+ * überschreiben gleichnamige persönliche Rollen. */
+export async function listRoles(project?: string): Promise<Role[]> {
+  const user = await readRoles(AGENTS_DIR, 'user')
+  const local = project ? await readRoles(path.join(project, '.claude', 'agents'), 'project') : []
+  const byName = new Map(user.map((role) => [role.name, role]))
+  for (const role of local) byName.set(role.name, role)
+  const roles = [...byName.values()]
   return roles.sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -97,7 +160,9 @@ export function parseRemote(url: string): string | null {
 
 async function originOf(dir: string): Promise<string | null> {
   try {
-    const { stdout } = await execFile('git', ['-C', dir, 'remote', 'get-url', 'origin'], { timeout: 4000 })
+    const { stdout } = await execFile('git', ['-C', dir, 'remote', 'get-url', 'origin'], {
+      timeout: 4000,
+    })
     return parseRemote(stdout)
   } catch {
     return null
@@ -137,7 +202,7 @@ export async function listProjects(): Promise<ProjectEntry[]> {
     unique.map(async (dir) => {
       const git = await isGit(dir)
       return { dir, git, repo: git ? await originOf(dir) : null }
-    }),
+    })
   )
 
   // Nach Repo bündeln: zwei Arbeitskopien desselben Repos sind ein Projekt.
@@ -166,4 +231,8 @@ export async function listProjects(): Promise<ProjectEntry[]> {
       if (Boolean(a.repo) !== Boolean(b.repo)) return a.repo ? -1 : 1
       return a.label.localeCompare(b.label)
     })
+}
+
+export async function projectContext(project: string) {
+  return inspectProject(project)
 }

@@ -126,7 +126,10 @@ export default function AgentGraph({
       signatur = ''
     }
     const beobachter = new MutationObserver(themeWechsel)
-    beobachter.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    beobachter.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
     const mq = window.matchMedia('(prefers-color-scheme: light)')
     mq.addEventListener('change', themeWechsel)
 
@@ -364,7 +367,10 @@ export default function AgentGraph({
       : status === 'running'
         ? '1px solid color-mix(in srgb, var(--color-accent) 70%, transparent)'
         : `1px solid ${status === 'error' ? 'var(--color-error)' : status === 'timeout' ? 'var(--color-warn)' : 'var(--color-divider)'}`,
-    boxShadow: status === 'running' ? '0 0 26px color-mix(in srgb, var(--color-accent) 30%, transparent)' : 'var(--shadow-sm)',
+    boxShadow:
+      status === 'running'
+        ? '0 0 26px color-mix(in srgb, var(--color-accent) 30%, transparent)'
+        : 'var(--shadow-sm)',
     opacity: status === 'idle' ? 0.75 : 1,
     transition: 'border-color .4s, box-shadow .4s, opacity .4s',
     color: 'inherit',
@@ -379,7 +385,10 @@ export default function AgentGraph({
     borderRadius: '50%',
     marginLeft: 'auto',
     background: punktFarbe(status),
-    boxShadow: status === 'running' ? '0 0 10px color-mix(in srgb, var(--color-accent) 90%, transparent)' : 'none',
+    boxShadow:
+      status === 'running'
+        ? '0 0 10px color-mix(in srgb, var(--color-accent) 90%, transparent)'
+        : 'none',
     animation: status === 'running' ? 'nfPulse 1.6s infinite' : 'none',
   })
 
@@ -408,6 +417,7 @@ export default function AgentGraph({
             onClick={() => onSelect('orchestrator')}
           >
             <div
+              className="core-orb"
               style={{
                 width: 34,
                 height: 34,

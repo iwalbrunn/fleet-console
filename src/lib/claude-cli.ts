@@ -1,11 +1,16 @@
 import { AUTOCOMPACT, CLAUDE_BIN } from './config'
+import type { EffortLevel, ExecutionMode } from './types'
 
 /** Steht als Systemanweisung in JEDER Runde — nicht nur in der ersten
  *  Nachricht. Die Umsetzung bleibt beim Orchestrator selbst; die Prüfrollen
  *  laufen als eigene Sessions (Rollenlauf), nicht über sein Agent-Tool.
  *  Der frühere Delegations-Zwang hat aus jeder Folgefrage eine Review-Runde
  *  gemacht und die eigentliche Umsetzung verdrängt. */
-export function orchestratorAuftrag(roles: string[], anforderungenDatei?: string): string {
+export function orchestratorAuftrag(
+  roles: string[],
+  anforderungenDatei?: string,
+  mode: ExecutionMode = 'direct'
+): string {
   const liste = roles.map((r) => `\`${r}\``).join(', ')
   const teile = [
     'Du bist die umsetzende Session dieser Aufgabe. Setze Anforderungen selbst um —',
@@ -14,9 +19,25 @@ export function orchestratorAuftrag(roles: string[], anforderungenDatei?: string
   ]
   if (roles.length) {
     teile.push(
-      `Die Prüfrollen (${liste}) laufen als separate, parallele Sessions („Rollenlauf")`,
-      'außerhalb dieser Unterhaltung. Beauftrage sie NICHT über das Agent-Tool — auch nicht',
-      'am Ende der Aufgabe. Einzige Ausnahme: der Nutzer verlangt es ausdrücklich in seiner Nachricht.',
+      `Verfügbare projektspezifische Spezialisten: ${liste}.`,
+      'Nutze sie nur für klar abgegrenzte Nebenaufgaben, deren Detailausgabe den Hauptkontext belasten würde.',
+      'Starte keinen pauschalen Agentenrat und delegiere keine Arbeit, die du direkt schneller erledigst.',
+      ''
+    )
+  }
+  if (mode === 'verified') {
+    teile.push(
+      'Ausführungsmodus VERIFIZIERT: Setze die Aufgabe selbst um und liefere prüfbare Evidenz.',
+      'Nach deiner Runde führt die Fleet Console deterministische Checks und eine unabhängige',
+      'Verifikationssession aus. Starte deshalb keinen eigenen pauschalen Abschlussreview.',
+      ''
+    )
+  }
+  if (mode === 'parallel') {
+    teile.push(
+      'Ausführungsmodus PARALLEL: Nutze für substanzielle, unabhängig zerlegbare Arbeit die native',
+      'Claude-Code-Workflow-Runtime. Teile nicht künstlich auf: sequentielle Aufgaben und Änderungen',
+      'an denselben Dateien bearbeitest du direkt. Führe Ergebnisse am Ende zu einer Antwort zusammen.',
       ''
     )
   }
@@ -48,6 +69,8 @@ export function orchestratorAuftrag(roles: string[], anforderungenDatei?: string
 
 export function buildArgs(opts: {
   model: string
+  effort?: EffortLevel
+  mode?: ExecutionMode
   skipPermissions: boolean
   roles?: string[]
   anforderungenDatei?: string
@@ -62,18 +85,17 @@ export function buildArgs(opts: {
     '--model',
     opts.model,
   ]
+  const effort = opts.mode === 'parallel' ? 'ultracode' : opts.effort
+  if (effort) args.push('--effort', effort)
   if (opts.roles?.length || opts.anforderungenDatei) {
     args.push(
       '--append-system-prompt',
-      orchestratorAuftrag(opts.roles ?? [], opts.anforderungenDatei)
+      orchestratorAuftrag(opts.roles ?? [], opts.anforderungenDatei, opts.mode ?? 'direct')
     )
   }
-  if (opts.roles?.length) {
-    // Ohne das schweigt der Stream, solange ein Subagent arbeitet: seine
-    // Ereignisse kommen dann mit parent_tool_use_id herein und lassen sich
-    // dem Knoten zuordnen — Phase, Werkzeuge und Tokens je Rolle.
-    args.push('--forward-subagent-text')
-  }
+  // Auch eingebaute Explore-/Plan-Agenten und Workflow-Agenten sichtbar
+  // halten. V2 braucht dafür keine vorab ausgewählte Rollenliste mehr.
+  args.push('--forward-subagent-text')
   // Früher verdichten hält den Kontext je Anfrage klein — der größte Hebel
   // gegen davonlaufenden Verbrauch in langen Sitzungen.
   args.push('--autocompact', AUTOCOMPACT)
@@ -98,6 +120,8 @@ export function cliText(args: string[]): string {
 
 export function cliPreview(opts: {
   model: string
+  effort?: EffortLevel
+  mode?: ExecutionMode
   skipPermissions: boolean
   roles?: string[]
 }): string {

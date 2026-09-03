@@ -60,6 +60,23 @@ export const MODELS = [
   { id: 'haiku', label: 'Haiku' },
 ] as const
 
+export const EFFORT_LEVELS = [
+  { id: 'low', label: 'Low' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'high', label: 'High' },
+  { id: 'xhigh', label: 'XHigh' },
+  { id: 'max', label: 'Max' },
+] as const
+
+/** Deterministische Prüfungen vor einem Modellreview. Nur vorhandene
+ * package.json-Skripte werden ausgeführt; Reihenfolge ist bewusst billig → teuer. */
+export const VERIFY_CHECKS = (process.env.FLEET_VERIFY_CHECKS ?? 'typecheck,test,lint,build')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
+
+export const VERIFY_TIMEOUT_SEC = Math.max(10, Number(process.env.FLEET_VERIFY_TIMEOUT_SEC ?? 600))
+
 // Der Ordnername unter ~/.claude/projects ist der Pfad mit / → -, das lässt
 // sich nicht eindeutig zurückrechnen (echte Ordner enthalten Bindestriche).
 // Der Projektpfad kommt deshalb immer aus dem Feld `cwd` im Transcript.

@@ -35,6 +35,17 @@ export function createSessionStore({
           state.status = state.claudeSessionId ? 'unterbrochen' : 'abgebrochen'
         }
         state.pipelineAktiv = false
+        state.mode ??= 'direct'
+        state.effort ??= 'high'
+        state.verification ??= {
+          status: 'idle',
+          risk: 'low',
+          reasons: [],
+          focuses: [],
+          checks: [],
+          fingerprint: null,
+          updatedAt: null,
+        }
         state.skipPermissions = Boolean(state.skipPermissions)
         state.kostenUsd ??= 0
         state.anforderungen ??= []

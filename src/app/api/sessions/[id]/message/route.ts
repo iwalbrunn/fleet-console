@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
 import { rejectCrossOrigin } from '@/lib/http'
-import { reconfigureSession, resumeSession, runPipeline, sendMessage, stopSession } from '@/lib/sessions'
+import {
+  reconfigureSession,
+  resumeSession,
+  runPipeline,
+  runVerification,
+  sendMessage,
+  stopSession,
+} from '@/lib/sessions'
+import type { EffortLevel } from '@/lib/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -34,7 +42,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       new Promise<{ ok: true }>((r) => setTimeout(() => r({ ok: true }), 2500)),
     ])
     void lauf.catch(() => {})
-    if (!res.ok) return NextResponse.json({ error: (res as { error?: string }).error }, { status: 409 })
+    if (!res.ok)
+      return NextResponse.json({ error: (res as { error?: string }).error }, { status: 409 })
+    return NextResponse.json({ ok: true })
+  }
+
+  if (body.action === 'verify') {
+    const lauf = runVerification(id, Boolean(body.force))
+    const res = await Promise.race([
+      lauf,
+      new Promise<{ ok: true }>((resolve) => setTimeout(() => resolve({ ok: true }), 2500)),
+    ])
+    void lauf.catch(() => {})
+    if (!res.ok)
+      return NextResponse.json({ error: (res as { error?: string }).error }, { status: 409 })
     return NextResponse.json({ ok: true })
   }
 
@@ -47,6 +68,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (body.action === 'reconfigure') {
     const res = await reconfigureSession(id, {
       model: typeof body.model === 'string' ? body.model : undefined,
+      effort: typeof body.effort === 'string' ? (body.effort as EffortLevel) : undefined,
       skipPermissions: typeof body.skipPermissions === 'boolean' ? body.skipPermissions : undefined,
     })
     if (!res.ok) return NextResponse.json({ error: res.error }, { status: 409 })
@@ -56,6 +78,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const text = String(body.text ?? '').trim()
   if (!text) return NextResponse.json({ error: 'Nachricht ist leer' }, { status: 400 })
   const ok = sendMessage(id, text)
-  if (!ok) return NextResponse.json({ error: 'Session nimmt keine Eingaben mehr an' }, { status: 409 })
+  if (!ok)
+    return NextResponse.json({ error: 'Session nimmt keine Eingaben mehr an' }, { status: 409 })
   return NextResponse.json({ ok })
 }

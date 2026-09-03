@@ -18,6 +18,21 @@
   "model": {
     "title": "Model"
   },
+  "effort": {
+    "title": "Reasoning effort"
+  },
+  "mode": {
+    "title": "Execution mode",
+    "direct": "Direct",
+    "verified": "Verified",
+    "parallel": "Parallel",
+    "directNote": "One strong main model works directly; subagents only when context or parallelism truly benefits.",
+    "verifiedNote": "Like Direct, followed by checks and an independent change verification.",
+    "parallelNote": "Ultracode uses native workflows for work that can be split meaningfully."
+  },
+  "projectContext": {
+    "title": "Claude project context"
+  },
   "session": {
     "start": "Start Session",
     "cancel": "Cancel",
@@ -81,6 +96,21 @@
     "modelSelectTitle": "\"per role\" omits --model — the model: from the role file applies",
     "configTitle": "Configure task and model"
   },
+  "verification": {
+    "title": "Verification",
+    "idle": "Checks and independent review of the current working state",
+    "checking": "deterministic checks running",
+    "reviewing": "independent change verifier working",
+    "passed": "passed",
+    "findings": "finished with findings",
+    "failed": "failed",
+    "skipped": "skipped",
+    "risk": "risk",
+    "start": "Verify",
+    "running": "running …",
+    "experts": "Specialists",
+    "runExperts": "Run selected specialists as well"
+  },
   "waitState": {
     "waitingFor": "Response is ready — the session has been waiting for your reply since {time}."
   },
@@ -138,7 +168,7 @@
     "localOnly": " — local",
     "workingCopies": "{count} working copies of this repo",
     "modelNote": "· takes effect via Apply",
-    "rolesTitle": "Roles · ~/.claude/agents",
+    "rolesTitle": "Specialists · optional",
     "roleLocked": "\"{role}\" was given to this session and can no longer be removed",
     "lockNote": "The roles are fixed for this session. Model and auto-permissions live in the process invocation — they switch via Apply, the conversation continues through --resume. The project folder is fixed.",
     "apply": "Apply · continue session",

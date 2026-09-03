@@ -15,6 +15,9 @@ export interface SessionRuntime {
   /** true, während der Prozess absichtlich für eine Umstellung beendet wird */
   wirdUmgestellt: boolean
   pipelineLaeuft: boolean
+  /** Zwischen Nutzer-Nachricht und result-Event. Verhindert Reviews auf
+   * einem Arbeitsstand, den der Hauptprozess gerade noch verändert. */
+  rundeAktiv: boolean
   /** Prozesse der laufenden Rollen — für Abbruch und Timeout. */
   rollenProzesse: Map<string, ChildProcessWithoutNullStreams>
   zuletztAbgelegt: number
@@ -78,6 +81,7 @@ export function createSessionRuntime(
     orderCounter: options.orderCounter ?? 0,
     wirdUmgestellt: false,
     pipelineLaeuft: false,
+    rundeAktiv: false,
     rollenProzesse: new Map(),
     zuletztAbgelegt: 0,
     ablageGeplant: false,

@@ -18,6 +18,21 @@
   "model": {
     "title": "Modell"
   },
+  "effort": {
+    "title": "Reasoning-Aufwand"
+  },
+  "mode": {
+    "title": "Ausführungsmodus",
+    "direct": "Direkt",
+    "verified": "Verifiziert",
+    "parallel": "Parallel",
+    "directNote": "Ein starkes Hauptmodell arbeitet direkt; Subagenten nur bei echtem Kontext- oder Parallelitätsvorteil.",
+    "verifiedNote": "Wie Direkt, danach Checks und eine unabhängige Change-Verifikation.",
+    "parallelNote": "Ultracode nutzt native Workflows für sinnvoll zerlegbare Aufgaben."
+  },
+  "projectContext": {
+    "title": "Claude-Projektkontext"
+  },
   "session": {
     "start": "Session starten",
     "cancel": "Abbrechen",
@@ -81,6 +96,21 @@
     "modelSelectTitle": "„je Rolle“ lässt --model weg — dann gilt das model: aus der Rollendatei",
     "configTitle": "Auftrag und Modell einstellen"
   },
+  "verification": {
+    "title": "Verifikation",
+    "idle": "Checks und unabhängige Prüfung des aktuellen Arbeitsstands",
+    "checking": "deterministische Checks laufen",
+    "reviewing": "unabhängiger Change-Verifier arbeitet",
+    "passed": "bestanden",
+    "findings": "mit Befunden beendet",
+    "failed": "fehlgeschlagen",
+    "skipped": "übersprungen",
+    "risk": "Risiko",
+    "start": "Verifizieren",
+    "running": "läuft …",
+    "experts": "Spezialisten",
+    "runExperts": "Ausgewählte Spezialisten zusätzlich starten"
+  },
   "waitState": {
     "waitingFor": "Antwort liegt vor — die Session wartet seit {time} auf deine Rückmeldung."
   },
@@ -138,7 +168,7 @@
     "localOnly": " — lokal",
     "workingCopies": "{count} Arbeitskopien dieses Repos",
     "modelNote": "· wirkt erst über Übernehmen",
-    "rolesTitle": "Rollen · ~/.claude/agents",
+    "rolesTitle": "Spezialisten · optional",
     "roleLocked": "„{role}“ ist dieser Session mitgegeben und lässt sich nicht mehr entfernen",
     "lockNote": "Die Rollen stehen für diese Session fest. Modell und Auto-Permissions stehen im Prozessaufruf — sie wechseln über Übernehmen, die Unterhaltung läuft dabei per --resume weiter. Der Projektordner ist fest.",
     "apply": "Übernehmen · Session fortsetzen",

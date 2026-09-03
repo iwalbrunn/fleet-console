@@ -36,4 +36,20 @@ describe('Claude-CLI-Vertrag', () => {
     expect(sichtbar).toContain('«Rollenauftrag»')
     expect(sichtbar).not.toContain(anforderungen)
   })
+
+  test('parallel mode delegates orchestration to native ultracode workflows', () => {
+    const args = buildArgs({
+      model: 'fable',
+      effort: 'high',
+      mode: 'parallel',
+      skipPermissions: false,
+    })
+    expect(args).toContain('--effort')
+    expect(args[args.indexOf('--effort') + 1]).toBe('ultracode')
+    expect(args).toContain('--forward-subagent-text')
+  })
+
+  test('verified mode explains the independent post-run check', () => {
+    expect(orchestratorAuftrag([], '/tmp/requirements.json', 'verified')).toContain('unabhängige')
+  })
 })

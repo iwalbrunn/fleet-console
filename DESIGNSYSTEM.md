@@ -1,6 +1,6 @@
 # Nocturne design system
 
-Nocturne is a quiet, compact dark interface: a near-neutral blue-grey ground, Inter at medium weight, soft 8px radii and an accent used as a line and a glow rather than a flood. Rules fade to transparent at their ends — over 48px a side — rather than stopping cleanly; short accent marks stay solid. Contrast comes from the tonal ramps, not from saturation, and photographs blend into the page with their dark values falling away.
+Nocturne Command is a quiet, compact control-room interface: a deep blue-black ground, Inter at medium weight, soft glass surfaces and a cyan accent used as a line, signal and glow rather than a flood. It borrows the legibility and live-system feel of contemporary Jarvis dashboards without ornamental sci-fi chrome.
 
 ## How to use this
 
@@ -31,7 +31,7 @@ paint by an inline script in the layout head.
 
 ## Color
 
-A dark ground (`--color-bg` #161826) with `--color-text` #e9e9ed and a single accent #9184d9 — a blurple in the product's own Pro-accent hue, at the chroma that hue carries in the app, so the accent reads as an accent against the desaturated ramps (this is a mono scheme: no second accent was chosen — the `--color-accent-2-*` variables carry a machine-derived stand-in kept only so both sets resolve; treat them as one role). Each role carries a 100–900 tonal ramp (`--color-neutral-100` … `--color-accent-2-900`) generated in OKLCH on a shared perceptual lightness scale, so the same step of any ramp has the same visual weight. On this dark ground use the dark steps (700–900) for tinted fills, hovers and subtle borders, 500 as the role's base, and the light steps (100–300) for text on those tints and for pressed states; prefer ramp steps over ad-hoc `color-mix()`. For elevation use `--shadow-sm/md/lg` (already tuned to the ground) rather than ad-hoc box-shadows.
+A dark ground (`--color-bg` #061018) with `--color-text` #e8f7fb and cyan `--color-accent` #32d5ff. Mint `--color-accent-2` is reserved for healthy/online state; amber and red remain semantic warning colors. Each role carries a 100–900 tonal ramp. Use dark steps for tinted fills and subtle borders, the base for signals, and light steps for readable text. Glass panels use `--glass-bg`, `--glass-border`, and `--hud-line`; keep them transparent enough to preserve hierarchy but opaque enough for long-form text.
 
 ## Type
 
@@ -47,17 +47,17 @@ Interactive states are themed, never browser defaults: give every interactive el
 
 ## Components
 
-| Class | What it is | Shown in |
-| --- | --- | --- |
-| `.btn` with `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-icon`, `.btn-block` | Actions — the primary is an accent outline, never a fill | components/buttons.html |
-| `.tag` with `.tag-accent`, `.tag-accent-2`, `.tag-neutral`, `.tag-outline` | Small labels tinted from the ramps (mono palette: accent-2 reads the same as accent) | components/buttons.html |
-| `.field` + `label`, `.input`, `.radio` + `.dot`, `.seg` + `.seg-opt` | Form fields and choices on native elements — no script | components/forms.html |
-| `.card` with `.card-kicker`, `.card-title`, `.card-body`, `.card-meta`; `.elev-sm/md/lg` | Surface-filled content cards; elevation utilities | components/cards.html |
-| `.nav` + `.nav-brand` | The header bar | components/navigation.html |
-| `.table` | Data tables with themed header and row rules | components/table.html |
-| `.dialog-backdrop` + `.dialog` (+ `.dialog-title/-body/-actions`) | A modal at the top elevation | components/dialog.html |
-| `.hr` | A horizontal rule — present, but this system prefers whitespace; avoid it | — |
-| `.lighten` | The image wrapper — every content photograph goes through it | foundations/image.html |
+| Class                                                                                    | What it is                                                                           | Shown in                   |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------- |
+| `.btn` with `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-icon`, `.btn-block`    | Actions — the primary is an accent outline, never a fill                             | components/buttons.html    |
+| `.tag` with `.tag-accent`, `.tag-accent-2`, `.tag-neutral`, `.tag-outline`               | Small labels tinted from the ramps (mono palette: accent-2 reads the same as accent) | components/buttons.html    |
+| `.field` + `label`, `.input`, `.radio` + `.dot`, `.seg` + `.seg-opt`                     | Form fields and choices on native elements — no script                               | components/forms.html      |
+| `.card` with `.card-kicker`, `.card-title`, `.card-body`, `.card-meta`; `.elev-sm/md/lg` | Surface-filled content cards; elevation utilities                                    | components/cards.html      |
+| `.nav` + `.nav-brand`                                                                    | The header bar                                                                       | components/navigation.html |
+| `.table`                                                                                 | Data tables with themed header and row rules                                         | components/table.html      |
+| `.dialog-backdrop` + `.dialog` (+ `.dialog-title/-body/-actions`)                        | A modal at the top elevation                                                         | components/dialog.html     |
+| `.hr`                                                                                    | A horizontal rule — present, but this system prefers whitespace; avoid it            | —                          |
+| `.lighten`                                                                               | The image wrapper — every content photograph goes through it                         | foundations/image.html     |
 
 States are built in: hovers and pressed states come from the accent ramp, keyboard focus is the 2px accent `:focus-visible` ring, `::selection` is an accent tint, and disabled controls drop to 45% opacity. Don't restyle them per page. The accent-to-ground pair is tuned to at least 3:1 — enough for icons, large text and interface chrome, not for body copy — so for paragraph-size text in the accent use a deep ramp step (`--color-accent-300` on this ground) rather than the accent itself.
 

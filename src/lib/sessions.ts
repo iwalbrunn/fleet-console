@@ -17,7 +17,7 @@ import {
 } from './session-runtime'
 import { sessionStore } from './session-storage'
 import { worktreeManager } from './session-worktrees'
-import type { SessionState } from './types'
+import type { EffortLevel, ExecutionMode, SessionState } from './types'
 import { PROJECT_ROOTS, WORKTREES_DIR } from './config'
 
 export type {
@@ -32,6 +32,7 @@ export type {
 export { buildArgs, cliPreview, cliText, orchestratorAuftrag } from './claude-cli'
 export { PRUEFAUFTRAG, VERDICT_SCHEMA, verdictAlsText, verdictKurz } from './review-verdict'
 export { collectWorkingState, runPipeline, type Arbeitsstand } from './review-pipeline'
+export { runVerification } from './verification'
 export { leererKnoten } from './session-runtime'
 
 type Session = SessionRuntime
@@ -46,6 +47,8 @@ function arbeitsdir(state: SessionState): string {
 export async function startSession(opts: {
   project: string
   model: string
+  mode: ExecutionMode
+  effort: EffortLevel
   roles: string[]
   prompt: string
   skipPermissions: boolean
@@ -55,6 +58,8 @@ export async function startSession(opts: {
   const id = randomUUID()
   const args = buildArgs({
     model: opts.model,
+    mode: opts.mode,
+    effort: opts.effort,
     skipPermissions: opts.skipPermissions,
     roles: opts.roles,
     anforderungenDatei: anforderungenDatei(id),
@@ -65,6 +70,8 @@ export async function startSession(opts: {
     claudeSessionId: null,
     project: opts.project,
     model: opts.model,
+    mode: opts.mode,
+    effort: opts.effort,
     roles: opts.roles,
     prompt: opts.prompt,
     skipPermissions: opts.skipPermissions,
@@ -95,6 +102,15 @@ export async function startSession(opts: {
     cli: cliText(args),
     pipelineAktiv: false,
     pipelineRollen: [],
+    verification: {
+      status: 'idle',
+      risk: 'low',
+      reasons: [],
+      focuses: [],
+      checks: [],
+      fingerprint: null,
+      updatedAt: null,
+    },
     worktreePath: null,
     worktreeBasis: null,
   }
@@ -117,7 +133,11 @@ export async function startSession(opts: {
       // Original weiterarbeiten, sondern sauber scheitern.
       state.status = 'fehler'
       state.endedAt = now()
-      push(session, { agent: 'system', kind: 'error', text: `Worktree konnte nicht angelegt werden: ${String(err).slice(0, 300)}` })
+      push(session, {
+        agent: 'system',
+        kind: 'error',
+        text: `Worktree konnte nicht angelegt werden: ${String(err).slice(0, 300)}`,
+      })
       void session.persist()
       return state
     }
@@ -128,7 +148,11 @@ export async function startSession(opts: {
   if (opts.uebergabeVon) await uebernehmeOffeneAnforderungen(session, opts.uebergabeVon)
 
   if (!startClaudeProcess(session, args)) return state
-  push(session, { agent: 'system', kind: 'system', text: `Arbeitsverzeichnis: ${arbeitsdir(state)}` })
+  push(session, {
+    agent: 'system',
+    kind: 'system',
+    text: `Arbeitsverzeichnis: ${arbeitsdir(state)}`,
+  })
 
   // Der Prompt geht unverändert als erste Nachricht in den Stream-Input —
   // die Delegations-Regeln stehen im Systemprompt, nicht in der Nachricht.
@@ -166,15 +190,22 @@ async function uebernehmeOffeneAnforderungen(s: Session, vonId: string) {
 /** Startet eine laufende Unterhaltung mit geänderten Einstellungen neu. */
 export async function reconfigureSession(
   id: string,
-  opts: { model?: string; skipPermissions?: boolean },
+  opts: { model?: string; effort?: EffortLevel; skipPermissions?: boolean }
 ): Promise<{ ok: boolean; error?: string }> {
   const s = registry.get(id)
   if (!s) return { ok: false, error: 'Session unbekannt' }
-  if (!s.state.claudeSessionId) return { ok: false, error: 'Session hat noch keine Kennung von Claude' }
+  if (!s.state.claudeSessionId)
+    return { ok: false, error: 'Session hat noch keine Kennung von Claude' }
 
   const model = opts.model ?? s.state.model
+  const effort = opts.effort ?? s.state.effort ?? 'high'
   const skipPermissions = opts.skipPermissions ?? s.state.skipPermissions
-  if (model === s.state.model && skipPermissions === s.state.skipPermissions) return { ok: true }
+  if (
+    model === s.state.model &&
+    effort === s.state.effort &&
+    skipPermissions === s.state.skipPermissions
+  )
+    return { ok: true }
 
   s.wirdUmgestellt = true
   const alt = s.child
@@ -184,17 +215,25 @@ export async function reconfigureSession(
   alt?.kill('SIGKILL')
 
   s.state.model = model
+  s.state.effort = effort
   s.state.skipPermissions = skipPermissions
   // Der neue Prozess zählt seine Kosten wieder von null.
   s.kostenBasisUsd = s.state.kostenUsd
   push(s, {
     agent: 'system',
     kind: 'system',
-    text: `Einstellungen geändert · Modell ${model}, Auto-Permissions ${skipPermissions ? 'an' : 'aus'} · Unterhaltung wird fortgesetzt`,
+    text: `Einstellungen geändert · Modell ${model}, Effort ${effort}, Auto-Permissions ${skipPermissions ? 'an' : 'aus'} · Unterhaltung wird fortgesetzt`,
   })
 
   const args = [
-    ...buildArgs({ model, skipPermissions, roles: s.state.roles, anforderungenDatei: anforderungenDatei(id) }),
+    ...buildArgs({
+      model,
+      effort,
+      mode: s.state.mode,
+      skipPermissions,
+      roles: s.state.roles,
+      anforderungenDatei: anforderungenDatei(id),
+    }),
     '--resume',
     s.state.claudeSessionId,
   ]
@@ -212,6 +251,7 @@ export function sendMessage(id: string, text: string): boolean {
     message: { role: 'user', content: [{ type: 'text', text }] },
   }
   s.child.stdin.write(JSON.stringify(msg) + '\n')
+  s.rundeAktiv = true
   push(s, { agent: 'du', kind: 'system', text })
   // Jede Nutzer-Nachricht wird deterministisch zur Anforderung — die
   // Einordnung (verworfen bei „ja bitte") ist Sache des Orchestrators.
@@ -229,7 +269,12 @@ export function anforderungenDatei(id: string): string {
  *  die kanonische Liste zurückschreiben. */
 async function ergaenzeAnforderung(s: Session, text: string) {
   try {
-    s.state.anforderungen = await requirementStore.append(s.state.id, s.state.anforderungen, text, now())
+    s.state.anforderungen = await requirementStore.append(
+      s.state.id,
+      s.state.anforderungen,
+      text,
+      now()
+    )
     emit(s, 'anforderungen', s.state.anforderungen)
     planeAblage(s)
   } catch {
@@ -270,21 +315,31 @@ export async function listSessions(): Promise<SessionState[]> {
 /** Nimmt eine unterbrochene Session wieder auf: der Stand kommt von der
  *  Platte, die Unterhaltung über `--resume` von Claude. Schlägt der Resume
  *  fehl, wird das gesagt statt still in eine leere Session zu laufen. */
-export async function resumeSession(id: string): Promise<{ ok: boolean; error?: string; state?: SessionState }> {
+export async function resumeSession(
+  id: string
+): Promise<{ ok: boolean; error?: string; state?: SessionState }> {
   if (registry.has(id)) return { ok: true, state: registry.get(id)!.state }
 
   const alt = (await sessionStore.loadAll()).find((s) => s.id === id)
   if (!alt) return { ok: false, error: 'Lauf nicht in der Ablage gefunden' }
-  if (!alt.claudeSessionId) return { ok: false, error: 'Dieser Lauf hat keine Claude-Kennung — er lässt sich nicht fortsetzen' }
+  if (!alt.claudeSessionId)
+    return {
+      ok: false,
+      error: 'Dieser Lauf hat keine Claude-Kennung — er lässt sich nicht fortsetzen',
+    }
   // Die Ablage ist eine Datei, in die theoretisch auch eine (permissive)
   // Session schreiben konnte — Pfade daraus werden deshalb nicht geglaubt,
   // sondern gegen die konfigurierten Wurzeln geprüft, bevor sie cwd werden.
   const projektErlaubt = PROJECT_ROOTS.some(
-    (wurzel) => alt.project === wurzel || alt.project.startsWith(wurzel + path.sep),
+    (wurzel) => alt.project === wurzel || alt.project.startsWith(wurzel + path.sep)
   )
   const worktreeErlaubt = !alt.worktreePath || alt.worktreePath.startsWith(WORKTREES_DIR + path.sep)
   if (!projektErlaubt || !worktreeErlaubt) {
-    return { ok: false, error: 'Ablage verweist auf ein Arbeitsverzeichnis außerhalb der erlaubten Wurzeln — Fortsetzen verweigert.' }
+    return {
+      ok: false,
+      error:
+        'Ablage verweist auf ein Arbeitsverzeichnis außerhalb der erlaubten Wurzeln — Fortsetzen verweigert.',
+    }
   }
   try {
     await fs.stat(alt.worktreePath ?? alt.project)
@@ -303,6 +358,8 @@ export async function resumeSession(id: string): Promise<{ ok: boolean; error?: 
   const args = [
     ...buildArgs({
       model: state.model,
+      effort: state.effort ?? 'high',
+      mode: state.mode ?? 'direct',
       skipPermissions: state.skipPermissions,
       roles: state.roles,
       anforderungenDatei: anforderungenDatei(id),

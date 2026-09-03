@@ -241,6 +241,7 @@ export function handleClaudeEvent(
   }
 
   if (event.type === 'result') {
+    session.rundeAktiv = false
     if (typeof event.total_cost_usd === 'number') {
       state.kostenUsd = session.kostenBasisUsd + event.total_cost_usd
       emit(session, 'tokens', {
@@ -274,7 +275,7 @@ export function handleClaudeEvent(
       setNode(session, graphNode.id, { status: 'done', phase: 'zurückgemeldet', endedAt: now() })
     }
     setNode(session, 'orchestrator', { phase: 'Antwort abgeschlossen' })
-    void effects.updateRequirements(session)
+    const requirementsUpdated = Promise.resolve(effects.updateRequirements(session))
     const delegated = state.nodes.some(
       (graphNode) => graphNode.id !== 'orchestrator' && graphNode.calls > 0
     )
@@ -286,5 +287,15 @@ export function handleClaudeEvent(
       })
     }
     emit(session, 'state', state)
+    if (!state.pipelineAktiv) {
+      void requirementsUpdated.finally(() => {
+        setTimeout(() => {
+          void import('./verification').then(async ({ recommendVerification, runVerification }) => {
+            if (state.mode === 'verified') await runVerification(state.id)
+            else await recommendVerification(state.id)
+          })
+        }, 250).unref?.()
+      })
+    }
   }
 }
