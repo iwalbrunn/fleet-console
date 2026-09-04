@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, test } from 'vitest'
 import { VERDICT_SCHEMA, verdictAlsText, verdictKurz } from '../sessions'
 import type { RollenVerdict } from '../types'

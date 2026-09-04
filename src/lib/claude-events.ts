@@ -1,10 +1,10 @@
 import { HOME } from './config'
 import { requirementStore } from './session-requirements'
 import {
+  anforderungenAendern,
   emit,
   node,
   now,
-  planeAblage,
   push,
   setNode,
   writeRoleReport,
@@ -41,14 +41,10 @@ export interface ClaudeEventEffects {
 }
 
 const defaultEffects: ClaudeEventEffects = {
-  updateRequirements: async (session) => {
-    session.state.anforderungen = await requirementStore.merge(
-      session.state.id,
-      session.state.anforderungen
-    )
-    emit(session, 'anforderungen', session.state.anforderungen)
-    planeAblage(session)
-  },
+  updateRequirements: (session) =>
+    anforderungenAendern(session, (aktuell) =>
+      requirementStore.merge(session.state.id, aktuell)
+    ),
   writeRoleReport,
 }
 

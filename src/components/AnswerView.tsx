@@ -185,7 +185,7 @@ export default function AnswerView({
 
   if (!antworten.length) {
     return (
-      <div className="stage" style={{ display: 'grid', placeItems: 'center', color: 'var(--color-neutral-600)', fontSize: 13 }}>
+      <div className="stage stage-text" style={{ display: 'grid', placeItems: 'center', color: 'var(--color-neutral-600)', fontSize: 13 }}>
         {t('answer.none')}
       </div>
     )
@@ -195,7 +195,7 @@ export default function AnswerView({
   const bedarf = extrahiereBedarf(neueste.text)
 
   return (
-    <div className="stage" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+    <div className="stage stage-text" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Was jetzt gebraucht wird, steht über dem Text — nicht darin begraben. */}
       {(bedarf.length > 0 || wartet) && (
         <div className="fragebox" style={{ margin: '12px 14px 0', flex: 'none' }}>

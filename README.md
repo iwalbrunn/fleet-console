@@ -116,14 +116,29 @@ The console shows:
 The v2 interface uses a compact command-center visual system: a dark blue-black
 ground, translucent panels, cyan data-flow signals and a central live topology.
 It is inspired by modern Jarvis-style dashboards while keeping long-running
-developer work readable.
+developer work readable. A light theme rebinds every token for daylight work;
+the theme follows the system preference and can be pinned from the top bar.
+
+![Fleet Console in the light theme](docs/screenshots/konsole-hell.webp)
+
+The answer view collects the session's replies as a numbered, collapsible
+thread, so a long run can be read back without scrolling through the raw
+stream:
+
+![Answer view with the collapsible reply thread](docs/screenshots/antwort.webp)
+
+The verification card runs the deterministic checks and the independent
+verifier. Specialists stay folded away until a change actually calls for them:
+
+![Verification card with the optional specialist run unfolded](docs/screenshots/verifikation.webp)
 
 ### Worktree isolation
 
 A session can run in its own Git worktree under
 `~/.fleet-console/worktrees/`.
 
-- Unchanged worktrees are removed automatically.
+- Unchanged worktrees are removed automatically when the process ends,
+  whether it finished, was stopped or crashed.
 - Worktrees with changes or commits are retained and reported.
 - Interrupted sessions keep their worktree for resumption.
 

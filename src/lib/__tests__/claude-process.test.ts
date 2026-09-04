@@ -84,4 +84,19 @@ describe('Claude-Prozesslebenszyklus', () => {
     expect(runtime.state.antworten.at(-1)?.text).toBe('Fertig.')
     expect(runtime.state.nodes[0]).toMatchObject({ status: 'done', phase: 'Abgeschlossen' })
   })
+
+  test('ein abgelöster Prozess schließt die Session nicht mehr ab', async () => {
+    const runtime = createSessionRuntime(state(directory), { persist: async () => {} })
+    expect(startClaudeProcess(runtime, [], { binary })).toBe(true)
+    const alt = runtime.child!
+    const geschlossen = new Promise<void>((resolve) => alt.once('close', () => resolve()))
+    // Umstellung: der alte Prozess wird abgelöst, bevor er beendet ist.
+    runtime.child = null
+    await geschlossen
+    // Handler des alten Prozesses läuft synchron nach 'close' — kurz nachgeben.
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(runtime.state.status).toBe('läuft')
+    expect(runtime.state.endedAt).toBeNull()
+  })
 })

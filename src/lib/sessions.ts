@@ -5,11 +5,11 @@ import { buildArgs, cliText } from './claude-cli'
 import { startClaudeProcess, terminateProcess } from './claude-process'
 import { requirementStore } from './session-requirements'
 import {
+  anforderungenAendern,
   createSessionRuntime,
   emit,
   leererKnoten,
   now,
-  planeAblage,
   push,
   registry,
   setNode,
@@ -269,14 +269,9 @@ export function anforderungenDatei(id: string): string {
  *  die kanonische Liste zurückschreiben. */
 async function ergaenzeAnforderung(s: Session, text: string) {
   try {
-    s.state.anforderungen = await requirementStore.append(
-      s.state.id,
-      s.state.anforderungen,
-      text,
-      now()
+    await anforderungenAendern(s, (aktuell) =>
+      requirementStore.append(s.state.id, aktuell, text, now())
     )
-    emit(s, 'anforderungen', s.state.anforderungen)
-    planeAblage(s)
   } catch {
     /* Liste ist ein Extra — ein Fehler hier darf die Nachricht nicht kippen */
   }

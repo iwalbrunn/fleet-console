@@ -802,7 +802,7 @@ export default function Page() {
                     <span style={{ color: 'var(--color-accent)' }}>{n.order}.</span>
                     {n.id}
                     {n.startedAt && n.endedAt && (
-                      <span style={{ color: 'var(--color-neutral-600)' }}>
+                      <span style={{ color: 'var(--color-neutral-500)' }}>
                         {fmtDuration(
                           new Date(n.endedAt).getTime() - new Date(n.startedAt).getTime()
                         )}

@@ -87,6 +87,9 @@
   --glass-border: rgba(93, 218, 245, 0.16);
   --hud-line: rgba(50, 213, 255, 0.22);
   --color-backdrop: rgba(10, 11, 18, 0.55);
+  --topbar-bg-1: rgba(11, 28, 39, 0.9); /* Kopfleiste: oben */
+  --topbar-bg-2: rgba(5, 15, 22, 0.68); /* Kopfleiste: unten */
+  --shadow-ambient: rgba(0, 0, 0, 0.45); /* Ambient-Schatten, Alpha per color-mix */
 
   color-scheme: dark;
 }
@@ -108,9 +111,9 @@
   --color-neutral-200: #383b45;
   --color-neutral-300: #4d505d;
   --color-neutral-400: #636779;
-  --color-neutral-500: #7d8194;
-  --color-neutral-600: #999db0;
-  --color-neutral-700: #b8bccb;
+  --color-neutral-500: #666a7e;
+  --color-neutral-600: #7b7f93;
+  --color-neutral-700: #a5a9bc;
   --color-neutral-800: #d6d9e4;
   --color-neutral-900: #eceef5;
 
@@ -151,6 +154,9 @@
   --glass-border: rgba(41, 126, 151, 0.18);
   --hud-line: rgba(28, 135, 166, 0.15);
   --color-backdrop: rgba(35, 37, 50, 0.35);
+  --topbar-bg-1: rgba(255, 255, 255, 0.86);
+  --topbar-bg-2: rgba(244, 245, 250, 0.72);
+  --shadow-ambient: rgba(35, 37, 60, 0.16);
 
   color-scheme: light;
 }
@@ -168,9 +174,9 @@
     --color-neutral-200: #383b45;
     --color-neutral-300: #4d505d;
     --color-neutral-400: #636779;
-    --color-neutral-500: #7d8194;
-    --color-neutral-600: #999db0;
-    --color-neutral-700: #b8bccb;
+    --color-neutral-500: #666a7e;
+    --color-neutral-600: #7b7f93;
+    --color-neutral-700: #a5a9bc;
     --color-neutral-800: #d6d9e4;
     --color-neutral-900: #eceef5;
 
@@ -211,6 +217,9 @@
     --glass-border: rgba(41, 126, 151, 0.18);
     --hud-line: rgba(28, 135, 166, 0.15);
     --color-backdrop: rgba(35, 37, 50, 0.35);
+    --topbar-bg-1: rgba(255, 255, 255, 0.86);
+    --topbar-bg-2: rgba(244, 245, 250, 0.72);
+    --shadow-ambient: rgba(35, 37, 60, 0.16);
 
     color-scheme: light;
   }
