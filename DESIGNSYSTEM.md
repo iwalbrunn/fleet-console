@@ -22,8 +22,12 @@ for a light ground: `nocturne.css` carries a second palette under
 steps become the text steps), the accent drops to a step that carries
 contrast on white, and the semantic state tokens (`--color-warn`,
 `--color-error`, `--color-ok`, `--color-code-bg`, `--color-overlay`, …) are
-rebound alongside. Components must therefore never hard-code a color — the
-tokens are the only place where a value may live. The one JS consumer is the
+rebound alongside. Surfaces that need a
+ground of their own (the top bar) or an ambient shadow use the tokens
+`--topbar-bg-1`, `--topbar-bg-2` and `--shadow-ambient`; shadow strength is
+derived from the latter via `color-mix`, so a light theme casts ink-tinted
+shadows instead of black ones. Components must therefore never hard-code a
+color — the tokens are the only place where a value may live. The one JS consumer is the
 agent-graph canvas, which reads the tokens via `getComputedStyle` once per
 theme change. The choice persists as `localStorage['fleet.theme']`
 (`light`/`dark`; absent = follow the system) and is applied before first

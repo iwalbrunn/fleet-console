@@ -1,7 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { sessionStore } from './session-storage'
 import { neuerUsageZaehler, type UsageZaehler } from './usage'
-import type { FeedLine, GraphNode, SessionState } from './types'
+import type { Anforderung, FeedLine, GraphNode, SessionState } from './types'
 
 export interface SessionRuntime {
   state: SessionState
@@ -24,6 +24,9 @@ export interface SessionRuntime {
   ablageGeplant: boolean
   kostenBasisUsd: number
   usageZaehler: UsageZaehler
+  /** Serialisiert alle Lese-/Schreibzyklen auf state.anforderungen — sonst
+   * überschreibt ein spät auflösender merge() einen frischen append(). */
+  anforderungenKette: Promise<void>
   persist: () => Promise<void>
 }
 
@@ -87,6 +90,7 @@ export function createSessionRuntime(
     ablageGeplant: false,
     kostenBasisUsd: options.kostenBasisUsd ?? 0,
     usageZaehler: neuerUsageZaehler(),
+    anforderungenKette: Promise.resolve(),
     persist:
       options.persist ??
       (async () => {
@@ -101,6 +105,21 @@ export function createSessionRuntime(
 }
 
 const MAX_LOG = 400
+
+/** Führt eine Änderung an der Anforderungsliste erst aus, wenn die vorige
+ *  abgeschlossen ist. Fehler brechen die Kette nicht ab. */
+export function anforderungenAendern(
+  session: SessionRuntime,
+  aenderung: (aktuell: Anforderung[]) => Promise<Anforderung[]>
+): Promise<void> {
+  const schritt = session.anforderungenKette.then(async () => {
+    session.state.anforderungen = await aenderung(session.state.anforderungen)
+    emit(session, 'anforderungen', session.state.anforderungen)
+    planeAblage(session)
+  })
+  session.anforderungenKette = schritt.catch(() => {})
+  return schritt
+}
 
 export function emit(session: SessionRuntime, event: string, data: unknown): void {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`

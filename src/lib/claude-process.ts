@@ -89,7 +89,10 @@ export function startClaudeProcess(
   })
 
   child.on('close', (code) => {
-    if (session.wirdUmgestellt) return
+    // Nur der aktuell gebundene Prozess darf den Sessionzustand abschließen.
+    // Nach einer Umstellung (reconfigureSession) läuft längst ein neuer
+    // Prozess — das späte close des alten darf ihn nicht beenden.
+    if (session.wirdUmgestellt || session.child !== child) return
     if (state.status !== 'abgebrochen') state.status = code === 0 ? 'fertig' : 'fehler'
     state.endedAt = now()
     setNode(session, 'orchestrator', {
@@ -119,7 +122,9 @@ export function startClaudeProcess(
       })
     }
     push(session, { agent: 'system', kind: 'result', text: `Prozess beendet (Code ${code})` })
-    if (state.status === 'fertig' || state.status === 'abgebrochen') void cleanupWorktree(session)
+    // Auch nach einem Absturz aufräumen: cleanup() behält den Worktree von
+    // selbst, sobald er Änderungen enthält.
+    void cleanupWorktree(session)
     void session.persist()
     emit(session, 'state', state)
     emit(session, 'end', { id: state.id })

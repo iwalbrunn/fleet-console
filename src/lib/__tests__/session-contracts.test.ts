@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, expectTypeOf, test } from 'vitest'
 import { leererKnoten } from '../sessions'
 import type {
