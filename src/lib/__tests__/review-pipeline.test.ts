@@ -128,4 +128,33 @@ describe('Review-Arbeitsstand', () => {
       fehler: null,
     })
   })
+  test('rejects a second review while the first is still collecting its diff', async () => {
+    const runtime = createSessionRuntime(sessionState(project), { persist: async () => {} })
+    registry.set(runtime.state.id, runtime)
+    const first = runPipeline(runtime.state.id, ['senior-developer'])
+    expect(await runPipeline(runtime.state.id, ['senior-developer'])).toMatchObject({
+      ok: false,
+      error: 'Es läuft bereits ein Rollenlauf',
+    })
+    await first
+    expect(runtime.pipelineLaeuft).toBe(false)
+  })
+  test('does not report success for missing structured review output', async () => {
+    const binary = path.join(directory, 'empty-role.mjs')
+    await fs.writeFile(
+      binary,
+      '#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({type:"result",subtype:"success"})+"\\n")'
+    )
+    await fs.chmod(binary, 0o755)
+    const runtime = createSessionRuntime(sessionState(project), { persist: async () => {} })
+    const result = await runRoleProcess(
+      runtime,
+      'senior-developer',
+      null,
+      'Review',
+      VERDICT_SCHEMA,
+      { binary, timeoutSec: 5 }
+    )
+    expect(result.status).toBe('error')
+  })
 })

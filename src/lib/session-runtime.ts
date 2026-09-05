@@ -24,6 +24,8 @@ export interface SessionRuntime {
   ablageGeplant: boolean
   kostenBasisUsd: number
   usageZaehler: UsageZaehler
+  processUsage: { in: number; out: number; cacheWrite: number; cacheRead: number }
+  roundOutput: number
   /** Serialisiert alle Lese-/Schreibzyklen auf state.anforderungen — sonst
    * überschreibt ein spät auflösender merge() einen frischen append(). */
   anforderungenKette: Promise<void>
@@ -90,6 +92,8 @@ export function createSessionRuntime(
     ablageGeplant: false,
     kostenBasisUsd: options.kostenBasisUsd ?? 0,
     usageZaehler: neuerUsageZaehler(),
+    processUsage: { in: 0, out: 0, cacheWrite: 0, cacheRead: 0 },
+    roundOutput: 0,
     anforderungenKette: Promise.resolve(),
     persist:
       options.persist ??

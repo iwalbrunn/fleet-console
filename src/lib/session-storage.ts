@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { REPORTS_DIR, RUNS_DIR } from './config'
@@ -64,7 +65,35 @@ export function createSessionStore({
     return states
   }
 
-  const persist = async (state: SessionState, lastAssistantText: string): Promise<void> => {
+  const pending = new Map<string, Promise<void>>()
+  const persist = (state: SessionState, lastAssistantText: string): Promise<void> => {
+    // Snapshot at invocation: later writes must not mutate this save midway.
+    const snapshot = structuredClone(state)
+    if (lastAssistantText.trim()) {
+      snapshot.reportPath = path.join(reportsDirectory, `${state.id}.md`)
+      state.reportPath = snapshot.reportPath
+    }
+    const next = (pending.get(state.id) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => save(snapshot, lastAssistantText))
+    pending.set(state.id, next)
+    void next
+      .finally(() => {
+        if (pending.get(state.id) === next) pending.delete(state.id)
+      })
+      .catch(() => {})
+    return next
+  }
+  const atomicWrite = async (target: string, content: string) => {
+    const temporary = `${target}.${randomUUID()}.tmp`
+    try {
+      await fs.writeFile(temporary, content, { encoding: 'utf8', mode: 0o600 })
+      await fs.rename(temporary, target)
+    } finally {
+      await fs.rm(temporary, { force: true }).catch(() => {})
+    }
+  }
+  const save = async (state: SessionState, lastAssistantText: string): Promise<void> => {
     await fs.mkdir(runsDirectory, { recursive: true })
     await fs.mkdir(reportsDirectory, { recursive: true })
     if (lastAssistantText.trim()) {
@@ -82,10 +111,10 @@ export function createSessionStore({
         '---',
         '',
       ].join('\n')
-      await fs.writeFile(report, head + lastAssistantText, 'utf8')
+      await atomicWrite(report, head + lastAssistantText)
       state.reportPath = report
     }
-    await fs.writeFile(file(state.id), JSON.stringify(state, null, 2), 'utf8')
+    await atomicWrite(file(state.id), JSON.stringify(state, null, 2))
   }
 
   const writeRoleReport = async (
@@ -107,7 +136,7 @@ export function createSessionStore({
       '---',
       '',
     ].join('\n')
-    await fs.writeFile(report, head + text, 'utf8')
+    await atomicWrite(report, head + text)
     return report
   }
 

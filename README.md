@@ -107,7 +107,7 @@ The console shows:
 - main session and native subagents,
 - active tools and phases,
 - token and request counts,
-- estimated process cost,
+- Claude subscription allowance (5-hour and weekly windows, reset times and freshness),
 - current requirements,
 - answers and questions requiring human attention,
 - deterministic checks and verifier findings,
@@ -131,6 +131,23 @@ The verification card runs the deterministic checks and the independent
 verifier. Specialists stay folded away until a change actually calls for them:
 
 ![Verification card with the optional specialist run unfolded](docs/screenshots/verifikation.webp)
+
+Subscription percentages come from the local CLI's `rate_limit_event` messages,
+including `unifiedWindows` when available. Fleet reads no OAuth credentials and
+makes no separate usage API calls. The card shows the last observation time;
+missing or expired values remain unavailable rather than being estimated from
+tokens. Open Claude's usage page from the card to check activity from other clients.
+The old dollar estimate is no longer displayed as subscription spending.
+
+Session output totals are reconciled with the CLI's final `modelUsage`, including
+reasoning and nested subagents. Counts during a turn are provisional. Input means
+fresh tokens plus cache writes; cache reads are tracked separately and accumulated
+once per message. Historical runs are deduplicated by message ID.
+
+Temporary network failures reconnect automatically. Failed message submissions
+retain the draft and display the server error; archived sessions show a saved
+snapshot. Diagnostic stderr output remains visible without being labeled a failure;
+structured errors and nonzero process exits are shown explicitly.
 
 ### Worktree isolation
 

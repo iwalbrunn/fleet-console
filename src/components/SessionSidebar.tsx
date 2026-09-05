@@ -44,6 +44,7 @@ function SwitchRow({
 /** Linke Spalte: Projekt, Modell, Rollen und die Start-/Stop-Steuerung.
  *  Aller Zustand lebt in der Seite — hier wird nur gerendert und gemeldet. */
 export function SessionSidebar(props: {
+  busy?: boolean
   session: SessionState | null
   prozessLebt: boolean
   wartet: boolean
@@ -438,7 +439,7 @@ export function SessionSidebar(props: {
         <button
           className="btn btn-primary btn-block"
           onClick={props.onStart}
-          disabled={!prompt.trim() || !project}
+          disabled={props.busy || !prompt.trim() || !project}
         >
           <i className="ph ph-play" />
           {t('session.start')}

@@ -1,5 +1,6 @@
 'use client'
 
+import { QuotaCard } from './QuotaCard'
 import { useTranslations } from 'next-intl'
 import { type RefObject } from 'react'
 import { fmtTime, fmtTokens, type Anforderung, type FeedLine, type SessionState } from '@/lib/types'
@@ -7,6 +8,8 @@ import { fmtTime, fmtTokens, type Anforderung, type FeedLine, type SessionState 
 /** Rechte Spalte: Kennzahlen, Anforderungen, Live-Feed und die Eingabe an
  *  die laufende Session. */
 export function SessionFeed(props: {
+  busy?: boolean
+  streamStatus: 'connecting' | 'connected' | 'reconnecting' | 'closed'
   session: SessionState | null
   prozessLebt: boolean
   arbeitet: boolean
@@ -15,7 +18,14 @@ export function SessionFeed(props: {
   unterbrochen: boolean
   ohneRolle: boolean
   pipelineAktiv: boolean
-  tokens: { in: number; out: number; cached: number; cacheWrite: number; anfragen: number; kosten: number }
+  tokens: {
+    in: number
+    out: number
+    cached: number
+    cacheWrite: number
+    anfragen: number
+    kosten: number
+  }
   elapsed: string
   anforderungen: Anforderung[]
   log: FeedLine[]
@@ -29,16 +39,33 @@ export function SessionFeed(props: {
 }) {
   const t = useTranslations()
   const {
-    session, prozessLebt, arbeitet, wartet, wartetSeit, unterbrochen, ohneRolle,
-    pipelineAktiv, tokens, elapsed, anforderungen, log, feedRef, draft,
+    session,
+    prozessLebt,
+    arbeitet,
+    wartet,
+    wartetSeit,
+    unterbrochen,
+    ohneRolle,
+    pipelineAktiv,
+    tokens,
+    elapsed,
+    anforderungen,
+    log,
+    feedRef,
+    draft,
   } = props
 
   return (
     <>
+      <QuotaCard />
       {unterbrochen && (
         <div className="warnbox" style={{ marginBottom: 10 }}>
           <span style={{ flex: 1 }}>{t('session.interrupted')}</span>
-          <button className="btn btn-secondary" style={{ fontSize: 11, padding: '3px 9px' }} onClick={props.onResume}>
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 11, padding: '3px 9px' }}
+            onClick={props.onResume}
+          >
             {t('session.resume')}
           </button>
         </div>
@@ -52,16 +79,21 @@ export function SessionFeed(props: {
         >
           <div className="kicker">{t('stats.tokens')}</div>
           <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-            {fmtTokens(tokens.out)} <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>{t('stats.out')}</span>
+            {fmtTokens(tokens.out)}{' '}
+            <span style={{ fontSize: 11, color: 'var(--color-neutral-500)' }}>
+              {t('stats.out')}
+            </span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--color-neutral-500)', lineHeight: 1.5 }}>
-            {fmtTokens(tokens.in)} {t('stats.in')} · {tokens.anfragen} {t('stats.requests')}
-            {tokens.kosten > 0 ? ` · ≈ $${tokens.kosten.toFixed(2)}` : ''}
+            {fmtTokens(tokens.in + tokens.cacheWrite)} {t('stats.in')} · {tokens.anfragen}{' '}
+            {t('stats.requests')}
           </div>
         </div>
         <div className="card" style={{ gap: 1, padding: '9px 11px' }}>
           <div className="kicker">{t('stats.duration')}</div>
-          <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{elapsed}</div>
+          <div style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+            {elapsed}
+          </div>
         </div>
       </div>
 
@@ -69,7 +101,8 @@ export function SessionFeed(props: {
         <div className="card" style={{ gap: 6, padding: '9px 11px', marginBottom: 12 }}>
           <div className="kicker" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ flex: 1 }}>
-              {t('requirements.title')} · {anforderungen.filter((a) => a.status === 'offen').length} {t('requirements.open')}
+              {t('requirements.title')} · {anforderungen.filter((a) => a.status === 'offen').length}{' '}
+              {t('requirements.open')}
             </span>
             {session && !prozessLebt && anforderungen.some((a) => a.status === 'offen') && (
               <button
@@ -82,9 +115,21 @@ export function SessionFeed(props: {
               </button>
             )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              maxHeight: 160,
+              overflowY: 'auto',
+            }}
+          >
             {anforderungen.map((a) => (
-              <div key={a.id} style={{ fontSize: 11, lineHeight: 1.45, display: 'flex', gap: 6 }} title={a.notiz ?? a.text}>
+              <div
+                key={a.id}
+                style={{ fontSize: 11, lineHeight: 1.45, display: 'flex', gap: 6 }}
+                title={a.notiz ?? a.text}
+              >
                 <span
                   style={{
                     flexShrink: 0,
@@ -119,33 +164,76 @@ export function SessionFeed(props: {
         <div className="kicker">{t('feed.title')}</div>
         {arbeitet && (
           <span
-            style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-accent)', animation: 'nfPulse 1.6s infinite' }}
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              background: 'var(--color-accent)',
+              animation: 'nfPulse 1.6s infinite',
+            }}
           />
         )}
-        {wartet && <span className="tag tag-outline" style={{ fontSize: 11 }}>{t('feed.waiting')}</span>}
-        <div className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-neutral-600)' }}>
+        {wartet && (
+          <span className="tag tag-outline" style={{ fontSize: 11 }}>
+            {t('feed.waiting')}
+          </span>
+        )}
+        <div
+          className="mono"
+          style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-neutral-600)' }}
+        >
           stream-json
         </div>
       </div>
 
+      {session && (
+        <div
+          role="status"
+          style={{
+            fontSize: 11,
+            marginBottom: 8,
+            color:
+              props.streamStatus === 'reconnecting'
+                ? 'var(--color-warn)'
+                : 'var(--color-neutral-500)',
+          }}
+        >
+          {t(`feed.${props.streamStatus}`)}
+        </div>
+      )}
       <div className="feed" ref={feedRef}>
-        {log.length === 0 && <div style={{ color: 'var(--color-neutral-600)' }}>{t('feed.noItems')}</div>}
+        {log.length === 0 && (
+          <div style={{ color: 'var(--color-neutral-600)' }}>{t('feed.noItems')}</div>
+        )}
         {log.map((l, i) => {
           const vorher = log[i - 1]
-          const neuerSprecher = !vorher || vorher.agent !== l.agent
+          const neuerSprecher = !vorher || vorher.agent !== l.agent || vorher.kind !== l.kind
           return (
             <div key={i} className={neuerSprecher ? 'feedgroup' : undefined}>
               {neuerSprecher && (
                 <div
                   className="feedagent"
-                  style={{ color: l.kind === 'error' ? 'var(--color-error-soft)' : l.agent === 'orchestrator' ? 'var(--color-accent)' : undefined }}
+                  style={{
+                    color:
+                      l.kind === 'error'
+                        ? 'var(--color-error-soft)'
+                        : l.agent === 'orchestrator'
+                          ? 'var(--color-accent)'
+                          : undefined,
+                  }}
                 >
                   {l.agent}
                 </div>
               )}
               <div className="feedrow">
                 <span className="feedtime">{fmtTime(l.t).slice(0, 5)}</span>
-                <span className="feedtext">{l.text}</span>
+                <span
+                  className="feedtext"
+                  style={{ color: l.kind === 'error' ? 'var(--color-error-soft)' : undefined }}
+                >
+                  {l.kind === 'error' ? '⚠ ' : ''}
+                  {l.text}
+                </span>
               </div>
             </div>
           )
@@ -175,7 +263,7 @@ export function SessionFeed(props: {
           className="input"
           placeholder={wartet ? t('messages.placeholderWartet') : t('messages.placeholderRunning')}
           value={draft}
-          disabled={!prozessLebt}
+          disabled={!prozessLebt || props.busy || pipelineAktiv}
           onChange={(e) => props.onDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -185,7 +273,12 @@ export function SessionFeed(props: {
           }}
           style={{ flex: 1 }}
         />
-        <button className="btn btn-primary btn-icon" onClick={props.onSend} disabled={!prozessLebt} title={t('messages.send')}>
+        <button
+          className="btn btn-primary btn-icon"
+          onClick={props.onSend}
+          disabled={!prozessLebt || props.busy || pipelineAktiv}
+          title={t('messages.send')}
+        >
           <i className="ph ph-paper-plane-tilt" />
         </button>
       </div>

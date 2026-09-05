@@ -140,4 +140,17 @@ describe('Session-Ablage', () => {
     expect(await fs.readFile(report!, 'utf8')).toContain('Keine offenen Befunde.')
     expect(rejected).toBeNull()
   })
+  test('serializes overlapping saves and never mixes state with another answer', async () => {
+    const store = createSessionStore({ runsDirectory, reportsDirectory })
+    const state = sessionState()
+    const saves = []
+    for (let n = 1; n <= 20; n++) {
+      state.tokensOut = n
+      saves.push(store.persist(state, `Answer ${n}`))
+    }
+    await Promise.all(saves)
+    expect(JSON.parse(await fs.readFile(store.file(state.id), 'utf8')).tokensOut).toBe(20)
+    expect(await fs.readFile(state.reportPath!, 'utf8')).toContain('Answer 20')
+    expect((await fs.readdir(runsDirectory)).filter((name) => name.endsWith('.tmp'))).toEqual([])
+  })
 })

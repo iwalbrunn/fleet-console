@@ -18,7 +18,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (blocked) return blocked
 
   const { id } = await params
-  const body = await req.json().catch(() => ({}))
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    return NextResponse.json({ error: 'Ungültiger Request-Body' }, { status: 400 })
 
   if (body.action === 'stop') {
     return NextResponse.json({ ok: stopSession(id) })

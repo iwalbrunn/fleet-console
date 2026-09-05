@@ -30,10 +30,14 @@ export default function RunsView() {
   useEffect(() => {
     if (!selected) return
     setDetail(null)
-    fetch(`/api/runs/${selected}`)
+    const controller = new AbortController()
+    fetch(`/api/runs/${selected}`, { signal: controller.signal })
       .then((r) => r.json())
       .then((d) => setDetail(d.run ?? null))
-      .catch(() => setDetail(null))
+      .catch(() => {
+        if (!controller.signal.aborted) setDetail(null)
+      })
+    return () => controller.abort()
   }, [selected])
 
   const statusLabel: Record<RunSummary['status'], string> = {
@@ -180,7 +184,10 @@ export default function RunsView() {
               </span>
               <span
                 style={{
-                  color: run.status === 'abgeschlossen' ? 'var(--color-neutral-300)' : 'var(--color-warn)',
+                  color:
+                    run.status === 'abgeschlossen'
+                      ? 'var(--color-neutral-300)'
+                      : 'var(--color-warn)',
                   fontSize: 11.5,
                 }}
               >
@@ -200,7 +207,9 @@ export default function RunsView() {
         <div className="card elev-sm" style={{ gap: 12 }}>
           <div className="card-kicker">{t('runs.report')}</div>
           {!detail && (
-            <div style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>{t('runs.selectRun')}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-neutral-500)' }}>
+              {t('runs.selectRun')}
+            </div>
           )}
           {detail && (
             <>

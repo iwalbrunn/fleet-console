@@ -49,19 +49,23 @@
     "worktreeNote": "eigene Arbeitskopie (git worktree), wird bei Nicht-Nutzung aufgeräumt"
   },
   "stats": {
-    "tokens": "Tokens",
+    "tokens": "Session-Tokens",
     "out": "aus",
     "in": "ein",
     "cache": "Cache",
     "requests": "Anfragen",
     "duration": "Dauer",
-    "tooltip": "Cache-Schreiben (↑) kostet extra, Cache-Lesen (↓) ist billig und zeigt die Kontextgröße. Sichtbar sind nur neu verarbeitete Tokens."
+    "tooltip": "Eingabe = frische Tokens + Cache-Schreiben; Cache-Lesen kumulativ. Ausgabe während einer Runde vorläufig; abschließende CLI-Zahlen enthalten auch Reasoning und Subagenten. Keine Abo-Abrechnung."
   },
   "feed": {
     "title": "Live-Feed",
     "waiting": "wartet",
     "noItems": "— noch nichts —",
-    "of": "von"
+    "of": "von",
+    "connecting": "Live-Verbindung wird aufgebaut …",
+    "connected": "Live verbunden",
+    "reconnecting": "Verbindung unterbrochen – verbinde erneut …",
+    "closed": "Gespeicherter Stand"
   },
   "messages": {
     "placeholderWartet": "Antworten und weitermachen …",
@@ -225,5 +229,26 @@
     "button": "Übergabe → neue Session",
     "title": "Startet eine frische Session mit vollem Kontext-Reset — die offenen Anforderungen werden übernommen.",
     "promptIntro": "Fortsetzung einer früheren Session mit frischem Kontext (Übergabe). Verschaffe dir zuerst den Stand: git log der letzten Commits, git status, dann die Anforderungsliste. Offene Anforderungen aus der Übergabe:"
+  },
+  "quota": {
+    "title": "Claude-Abo · Kontingent",
+    "allowed": "Nutzung möglich",
+    "allowed_warning": "Kontingent wird knapp",
+    "rejected": "Limit erreicht",
+    "five_hour": "5 Stunden",
+    "seven_day": "7 Tage",
+    "seven_day_opus": "7 Tage · Opus",
+    "seven_day_sonnet": "7 Tage · Sonnet",
+    "overage": "Zusatznutzung",
+    "remaining": "{value} % verbleibend",
+    "unknown": "Nicht verfügbar",
+    "reset": "Reset: {time}",
+    "expired": "Reset-Zeit vergangen ({time}) – neuer Stand ausstehend",
+    "updated": "Von Claude gemeldet: {time}",
+    "stale": "Letzter bekannter Stand",
+    "noData": "Noch keine Limit-Daten von Claude empfangen.",
+    "note": "Gemeinsames Claude-Kontingent. Aktualisiert sich bei CLI-Limitmeldungen; Tokens sind kein Restkontingent.",
+    "open": "Aktuellen Stand bei Claude öffnen",
+    "overageActive": "Claude meldet kostenpflichtige Zusatznutzung."
   }
 }

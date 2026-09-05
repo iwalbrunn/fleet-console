@@ -2,8 +2,8 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { startClaudeProcess } from '../claude-process'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { startClaudeProcess, terminateProcess } from '../claude-process'
 import { createSessionRuntime, leererKnoten } from '../session-runtime'
 import type { SessionState } from '../types'
 
@@ -99,4 +99,53 @@ describe('Claude-Prozesslebenszyklus', () => {
     expect(runtime.state.status).toBe('läuft')
     expect(runtime.state.endedAt).toBeNull()
   })
+})
+
+test('SIGTERM is followed by SIGKILL for a child that remains alive', () => {
+  vi.useFakeTimers()
+  const child = {
+    exitCode: null,
+    signalCode: null,
+    killed: false,
+    kill: vi.fn(() => {
+      child.killed = true
+    }),
+    once: vi.fn(),
+  }
+  terminateProcess(child as never)
+  vi.advanceTimersByTime(100000)
+  expect(child.kill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+  vi.useRealTimers()
+})
+test('late output and errors from a replaced process cannot corrupt the new session', () => {
+  const runtime = createSessionRuntime(state('/tmp'), { persist: async () => {} })
+  startClaudeProcess(runtime, ['-e', 'setTimeout(()=>{},1000)'], { binary: process.execPath })
+  const old = runtime.child!
+  runtime.child = null
+  old.stdout.emit('data', '{"type":"system","session_id":"stale"}\n')
+  old.emit('error', new Error('stale'))
+  old.kill('SIGKILL')
+  expect(runtime.state.claudeSessionId).toBeNull()
+  expect(runtime.state.status).toBe('läuft')
+})
+test('flushes final JSON without newline and treats stderr diagnostics as informational', async () => {
+  const runtime = createSessionRuntime(state('/tmp'), { persist: async () => {} })
+  const done = new Promise<void>((resolve) =>
+    runtime.subscribers.add((s) => {
+      if (s.startsWith('event: end')) resolve()
+    })
+  )
+  startClaudeProcess(
+    runtime,
+    [
+      '-e',
+      'process.stderr.write("diagnostic");process.stdout.write(JSON.stringify({type:"system",session_id:"tail"}))',
+    ],
+    { binary: process.execPath }
+  )
+  await done
+  expect(runtime.state.claudeSessionId).toBe('tail')
+  expect(runtime.state.log.find((l) => l.agent === 'stderr')?.kind).toBe('system')
+  expect(runtime.state.status).toBe('fertig')
+  expect(runtime.child).toBeNull()
 })

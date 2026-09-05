@@ -1,5 +1,6 @@
 'use client'
 
+import { requestJson } from '@/lib/api-client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import AgentGraph from '@/components/AgentGraph'
@@ -80,6 +81,12 @@ export default function Page() {
   const [schmal, setSchmal] = useState(false)
   const [schublade, setSchublade] = useState<'links' | 'rechts' | null>(null)
   const [draft, setDraft] = useState('')
+  const [streamStatus, setStreamStatus] = useState<
+    'connecting' | 'connected' | 'reconnecting' | 'closed'
+  >('closed')
+  const [streamVersion, setStreamVersion] = useState(0)
+  const actionBusy = useRef(false)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
 
@@ -100,6 +107,8 @@ export default function Page() {
 
   const sessionAnzeigen = useCallback((s: SessionState) => {
     setSession(s)
+    setAnforderungen(s.anforderungen ?? [])
+    setNeueAntwort(false)
     setNodes(s.nodes)
     setLog(s.log)
     setAntworten(s.antworten ?? [])
@@ -116,8 +125,14 @@ export default function Page() {
   // Beim Laden anhängen: Sessions leben im Server, nicht im Browser. Nach
   // einem Reload wird die neueste laufende Session wieder übernommen.
   useEffect(() => {
-    fetch('/api/meta')
-      .then((r) => r.json())
+    requestJson<{
+      projects: ProjectEntry[]
+      roles: Role[]
+      models: { id: string; label: string }[]
+      efforts: { id: string; label: string }[]
+      sessions: SessionState[]
+      pipeline: NonNullable<typeof pipelineMeta>
+    }>('/api/meta')
       .then((d) => {
         setProjects(d.projects ?? [])
         setRoles(d.roles ?? [])
@@ -157,13 +172,19 @@ export default function Page() {
   // Workflows und Checks aus genau dieser Arbeitskopie neu einlesen.
   useEffect(() => {
     if (!project) return
-    fetch(`/api/meta?project=${encodeURIComponent(project)}`)
-      .then((response) => response.json())
+    const controller = new AbortController()
+    requestJson<{ roles: Role[]; projectContext: ProjectIntelligence | null }>(
+      `/api/meta?project=${encodeURIComponent(project)}`,
+      { signal: controller.signal }
+    )
       .then((data) => {
         setRoles(data.roles ?? [])
         setProjectContext(data.projectContext ?? null)
       })
-      .catch(() => setProjectContext(null))
+      .catch(() => {
+        if (!controller.signal.aborted) setProjectContext(null)
+      })
+    return () => controller.abort()
   }, [project])
 
   useEffect(() => {
@@ -233,11 +254,14 @@ export default function Page() {
   // Live-Stream der laufenden Session
   useEffect(() => {
     if (!session?.id) return
+    setStreamStatus('connecting')
     const es = new EventSource(`/api/sessions/${session.id}/stream`)
 
     es.addEventListener('state', (e) => {
       const s: SessionState = JSON.parse((e as MessageEvent).data)
       setSession(s)
+      setStreamStatus('connected')
+      setSessions((prev) => prev.map((entry) => (entry.id === s.id ? s : entry)))
       setNodes(s.nodes)
       setLog(s.log)
       setAntworten(s.antworten ?? [])
@@ -267,11 +291,17 @@ export default function Page() {
     es.addEventListener('anforderungen', (e) =>
       setAnforderungen(JSON.parse((e as MessageEvent).data))
     )
-    es.addEventListener('end', () => es.close())
-    es.onerror = () => es.close()
+    // Auch nach Prozessende können Rollen noch Ergebnisse liefern.
+    es.addEventListener('archived', () => {
+      es.close()
+      setStreamStatus('closed')
+    })
+    es.onopen = () => setStreamStatus('connected')
+    es.onerror = () =>
+      setStreamStatus(es.readyState === EventSource.CLOSED ? 'closed' : 'reconnecting')
 
     return () => es.close()
-  }, [session?.id])
+  }, [session?.id, streamVersion])
 
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight })
@@ -290,45 +320,60 @@ export default function Page() {
     skip ? ' --dangerously-skip-permissions' : ''
   }`
 
-  const start = useCallback(async () => {
+  const perform = useCallback(async (action: () => Promise<void>) => {
+    if (actionBusy.current) return
+    actionBusy.current = true
+    setBusy(true)
     setError(null)
-    const res = await fetch('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        project,
-        model,
-        mode,
-        effort,
-        roles: picked,
-        prompt,
-        skipPermissions: skip,
-        worktree,
-        uebergabeVon: uebergabeVon ?? undefined,
-      }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      setError(data.error ?? t('errors.startFailed'))
-      return
+    try {
+      await action()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error))
+    } finally {
+      actionBusy.current = false
+      setBusy(false)
     }
-    setUebergabeVon(null)
-    setSessions((prev) => [data.session, ...prev])
-    sessionAnzeigen(data.session)
-    setTab('konsole')
-  }, [
-    project,
-    model,
-    mode,
-    effort,
-    picked,
-    prompt,
-    skip,
-    worktree,
-    uebergabeVon,
-    sessionAnzeigen,
-    t,
-  ])
+  }, [])
+
+  const start = useCallback(
+    async () =>
+      perform(async () => {
+        setError(null)
+        const data = await requestJson<{ session: SessionState }>('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project,
+            model,
+            mode,
+            effort,
+            roles: picked,
+            prompt,
+            skipPermissions: skip,
+            worktree,
+            uebergabeVon: uebergabeVon ?? undefined,
+          }),
+        })
+
+        setUebergabeVon(null)
+        setSessions((prev) => [data.session, ...prev])
+        sessionAnzeigen(data.session)
+        setTab('konsole')
+      }),
+    [
+      perform,
+      project,
+      model,
+      mode,
+      effort,
+      picked,
+      prompt,
+      skip,
+      worktree,
+      uebergabeVon,
+      sessionAnzeigen,
+    ]
+  )
 
   /** Übergabe: beendete Session → frische Session mit vollem Kontext-Reset.
    *  Die offenen Anforderungen wandern in den Prompt UND (serverseitig) in
@@ -346,100 +391,104 @@ export default function Page() {
     setProject(session.project)
   }
 
-  const send = async () => {
-    if (!session || !draft.trim()) return
-    // Folgenachrichten gehen unverändert an den Orchestrator. Früher hing
-    // hier ein Delegations-Anhang dran — der hat aus jedem „ja bitte" eine
-    // volle Review-Runde gemacht. Reviews laufen jetzt über den Rollenlauf.
-    const text = draft.trim()
-    setDraft('')
-    await fetch(`/api/sessions/${session.id}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+  const send = async () =>
+    perform(async () => {
+      if (!session || !draft.trim()) return
+      // Folgenachrichten gehen unverändert an den Orchestrator. Früher hing
+      // hier ein Delegations-Anhang dran — der hat aus jedem „ja bitte" eine
+      // volle Review-Runde gemacht. Reviews laufen jetzt über den Rollenlauf.
+      const text = draft.trim()
+      await requestJson(`/api/sessions/${session.id}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      setDraft((current) => (current.trim() === text ? '' : current))
     })
-  }
 
   /** Rollenlauf: jede gewählte Rolle bekommt eine eigene Session auf dem
    *  Projekt. Läuft unabhängig davon, ob der Orchestrator delegieren will —
    *  das ist der Unterschied zum Anhängen von Text an die Nachricht. */
-  const starteRollenlauf = async (rollen?: string[]) => {
-    if (!session) return
-    const gewaehlt = (rollen ?? laufRollen).filter(Boolean)
-    if (!gewaehlt.length) {
-      setError(t('roleRun.noRoleError'))
-      return
-    }
-    setError(null)
-    setPipelineOffen(false)
-    const res = await fetch(`/api/sessions/${session.id}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'pipeline',
-        roles: gewaehlt,
-        model: pipelineModell,
-        auftrag: pipelineAuftrag.trim() || undefined,
-        stand: pipelineStand,
-      }),
+  const starteRollenlauf = async (rollen?: string[]) =>
+    perform(async () => {
+      if (!session) return
+      const gewaehlt = (rollen ?? laufRollen).filter(Boolean)
+      if (!gewaehlt.length) {
+        setError(t('roleRun.noRoleError'))
+        return
+      }
+      setError(null)
+      setPipelineOffen(false)
+      await requestJson(`/api/sessions/${session.id}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'pipeline',
+          roles: gewaehlt,
+          model: pipelineModell,
+          auftrag: pipelineAuftrag.trim() || undefined,
+          stand: pipelineStand,
+        }),
+      })
     })
-    if (!res.ok) setError((await res.json()).error ?? t('errors.roleRunFailed'))
-  }
 
-  const verifizieren = async () => {
-    if (!session) return
-    setError(null)
-    const res = await fetch(`/api/sessions/${session.id}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'verify', force: true }),
+  const verifizieren = async () =>
+    perform(async () => {
+      if (!session) return
+      setError(null)
+      await requestJson(`/api/sessions/${session.id}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', force: true }),
+      })
     })
-    if (!res.ok) setError((await res.json()).error ?? t('errors.roleRunFailed'))
-  }
 
   /** Unterbrochene Session wieder aufnehmen — der Serverprozess war weg, die
    *  Unterhaltung liegt noch bei Claude. */
-  const fortsetzen = async () => {
-    if (!session) return
-    setError(null)
-    const res = await fetch(`/api/sessions/${session.id}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'resume' }),
+  const fortsetzen = async () =>
+    perform(async () => {
+      if (!session) return
+      setError(null)
+      const data = await requestJson<{ session?: SessionState }>(
+        `/api/sessions/${session.id}/message`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'resume' }),
+        }
+      )
+      if (data.session) sessionAnzeigen(data.session)
+      setStreamVersion((value) => value + 1)
     })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setError(data.error ?? t('errors.resumeFailed'))
-      return
-    }
-    if (data.session) setSession(data.session)
-  }
 
-  const uebernehmen = async () => {
-    if (!session) return
-    setError(null)
-    const res = await fetch(`/api/sessions/${session.id}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'reconfigure', model, effort, skipPermissions: skip }),
+  const uebernehmen = async () =>
+    perform(async () => {
+      if (!session) return
+      setError(null)
+      await requestJson(`/api/sessions/${session.id}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reconfigure', model, effort, skipPermissions: skip }),
+      })
     })
-    if (!res.ok) setError((await res.json()).error ?? t('errors.applyFailed'))
-  }
 
-  const stop = async () => {
-    if (!session) return
-    await fetch(`/api/sessions/${session.id}/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'stop' }),
+  const stop = async () =>
+    perform(async () => {
+      if (!session) return
+      await requestJson(`/api/sessions/${session.id}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop' }),
+      })
     })
-  }
 
   // „läuft" heißt beim Stream-Eingabemodus nur: der Prozess lebt. Ob er
   // arbeitet oder auf eine Nachricht wartet, steht im letzten Ereignis.
   const prozessLebt = session?.status === 'läuft' || session?.status === 'startet'
   const letztesEreignis = log[log.length - 1]
-  const wartet = Boolean(prozessLebt && letztesEreignis?.kind === 'result')
+  const wartet = Boolean(
+    prozessLebt && nodes.find((n) => n.id === 'orchestrator')?.status !== 'running'
+  )
   const arbeitet = Boolean(prozessLebt && !wartet)
   const wartetSeit =
     wartet && letztesEreignis ? fmtDuration(now - new Date(letztesEreignis.t).getTime()) : null
@@ -453,7 +502,7 @@ export default function Page() {
     (session.model !== model || session.effort !== effort || session.skipPermissions !== skip)
   )
   const pipelineAktiv = Boolean(session?.pipelineAktiv)
-  const unterbrochen = session?.status === 'unterbrochen'
+  const unterbrochen = Boolean(session?.claudeSessionId && !prozessLebt && !pipelineAktiv)
   const elapsed = session
     ? fmtDuration(
         (session.endedAt ? new Date(session.endedAt).getTime() : now) -
@@ -555,6 +604,7 @@ export default function Page() {
           style={{ display: !schmal && links === 0 ? 'none' : undefined }}
         >
           <SessionSidebar
+            busy={busy}
             session={session}
             prozessLebt={prozessLebt}
             wartet={wartet}
@@ -696,7 +746,8 @@ export default function Page() {
                 </div>
                 <div className="hud-stat">
                   <i className="ph ph-coins" style={{ color: 'var(--color-accent)' }} />
-                  {fmtTokens(tokens.out)} {t('stats.out')} · {fmtTokens(tokens.in)} {t('stats.in')}
+                  {fmtTokens(tokens.out)} {t('stats.out')} ·{' '}
+                  {fmtTokens(tokens.in + tokens.cacheWrite)} {t('stats.in')}
                 </div>
               </div>
             </div>
@@ -857,6 +908,8 @@ export default function Page() {
               }}
             >
               <SessionFeed
+                busy={busy}
+                streamStatus={streamStatus}
                 session={session}
                 prozessLebt={prozessLebt}
                 arbeitet={arbeitet}

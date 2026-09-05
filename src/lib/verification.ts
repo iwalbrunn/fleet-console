@@ -1,3 +1,4 @@
+import { childEnvironment } from './child-env'
 import { createHash } from 'node:crypto'
 import { execFile as execFileCallback } from 'node:child_process'
 import fs from 'node:fs/promises'
@@ -88,6 +89,7 @@ async function runChecks(project: string): Promise<CheckResult[]> {
     try {
       const { stdout, stderr } = await execFile('npm', ['run', name], {
         cwd: project,
+        env: childEnvironment(),
         timeout: VERIFY_TIMEOUT_SEC * 1000,
         maxBuffer: 8 * 1024 * 1024,
       })
@@ -127,156 +129,171 @@ export async function runVerification(
       ok: false,
       error: 'Die Hauptsession arbeitet noch — Verifikation erst nach dem Ergebnis starten.',
     }
-  session.state.verification ??= {
-    status: 'idle',
-    risk: 'low',
-    reasons: [],
-    focuses: [],
-    checks: [],
-    fingerprint: null,
-    updatedAt: null,
-  }
-
-  const project = worktreeManager.workingDirectory(session.state)
-  const stand = await collectWorkingState(project)
-  if (!stand?.text) {
-    session.state.verification = {
-      status: 'skipped',
+  session.pipelineLaeuft = true
+  try {
+    session.state.verification ??= {
+      status: 'idle',
       risk: 'low',
-      reasons: ['Keine uncommitteten Änderungen'],
+      reasons: [],
       focuses: [],
       checks: [],
       fingerprint: null,
+      updatedAt: null,
+    }
+
+    const project = worktreeManager.workingDirectory(session.state)
+    const stand = await collectWorkingState(project)
+    if (!stand?.text) {
+      session.state.verification = {
+        status: 'skipped',
+        risk: 'low',
+        reasons: ['Keine uncommitteten Änderungen'],
+        focuses: [],
+        checks: [],
+        fingerprint: null,
+        updatedAt: now(),
+      }
+      emit(session, 'state', session.state)
+      return { ok: false, error: 'Keine uncommitteten Änderungen — nichts zu verifizieren.' }
+    }
+    const fingerprint = createHash('sha256').update(stand.text).digest('hex')
+    if (
+      !force &&
+      session.state.verification.fingerprint === fingerprint &&
+      ['passed', 'findings'].includes(session.state.verification.status)
+    ) {
+      return { ok: true }
+    }
+
+    const assessment = assessRisk(stand.pfade)
+    session.pipelineLaeuft = true
+    session.state.pipelineAktiv = true
+    session.state.pipelineRollen = ['change-verifier']
+    session.state.verification = {
+      status: 'checking',
+      ...assessment,
+      checks: [],
+      fingerprint,
       updatedAt: now(),
     }
+    const verifier = node(session, 'change-verifier')
+    setNode(session, 'change-verifier', {
+      status: 'running',
+      phase: 'deterministische Prüfungen',
+      calls: verifier.calls + 1,
+      order: verifier.order ?? ++session.orderCounter,
+      quelle: 'rollenlauf',
+      startedAt: now(),
+      endedAt: null,
+    })
+    push(session, {
+      agent: 'system',
+      kind: 'system',
+      text: `Verifikation gestartet · Risiko ${assessment.risk} · Checks vor Modellreview`,
+    })
     emit(session, 'state', session.state)
-    return { ok: false, error: 'Keine uncommitteten Änderungen — nichts zu verifizieren.' }
-  }
-  const fingerprint = createHash('sha256').update(stand.text).digest('hex')
-  if (
-    !force &&
-    session.state.verification.fingerprint === fingerprint &&
-    ['passed', 'findings'].includes(session.state.verification.status)
-  ) {
-    return { ok: true }
-  }
 
-  const assessment = assessRisk(stand.pfade)
-  session.pipelineLaeuft = true
-  session.state.pipelineAktiv = true
-  session.state.pipelineRollen = ['change-verifier']
-  session.state.verification = {
-    status: 'checking',
-    ...assessment,
-    checks: [],
-    fingerprint,
-    updatedAt: now(),
-  }
-  const verifier = node(session, 'change-verifier')
-  setNode(session, 'change-verifier', {
-    status: 'running',
-    phase: 'deterministische Prüfungen',
-    calls: verifier.calls + 1,
-    order: verifier.order ?? ++session.orderCounter,
-    quelle: 'rollenlauf',
-    startedAt: now(),
-    endedAt: null,
-  })
-  push(session, {
-    agent: 'system',
-    kind: 'system',
-    text: `Verifikation gestartet · Risiko ${assessment.risk} · Checks vor Modellreview`,
-  })
-  emit(session, 'state', session.state)
+    try {
+      const checks = await runChecks(project)
+      session.state.verification.checks = checks
+      for (const check of checks) {
+        push(session, {
+          agent: 'check',
+          kind: check.status === 'passed' ? 'system' : 'error',
+          text: `${check.command}: ${check.status === 'passed' ? 'bestanden' : 'fehlgeschlagen'} (${Math.round(check.durationMs / 1000)}s)`,
+        })
+      }
+      session.state.verification.status = 'reviewing'
+      setNode(session, 'change-verifier', { phase: 'unabhängige Modellprüfung' })
 
-  try {
-    const checks = await runChecks(project)
-    session.state.verification.checks = checks
-    for (const check of checks) {
-      push(session, {
-        agent: 'check',
-        kind: check.status === 'passed' ? 'system' : 'error',
-        text: `${check.command}: ${check.status === 'passed' ? 'bestanden' : 'fehlgeschlagen'} (${Math.round(check.durationMs / 1000)}s)`,
+      const checkText = checks.length
+        ? checks
+            .map((c) => `- ${c.command}: ${c.status}\n${c.status === 'failed' ? c.output : ''}`)
+            .join('\n')
+        : '- Keine konfigurierten Checks gefunden.'
+      const requirements = session.state.anforderungen
+        .map((entry) => `- [${entry.status}] ${entry.text}`)
+        .join('\n')
+      const task = [
+        'Prüfe den abgeschlossenen Arbeitsstand unabhängig gegen die Anforderungen.',
+        `Risikostufe: ${assessment.risk}. Fokus: ${assessment.focuses.join(', ')}.`,
+        'Melde nur konkrete Befunde ab Schweregrad mittel. Nimm keine Änderungen vor.',
+        `\n## Anforderungen\n${requirements || '- Keine externe Liste vorhanden.'}`,
+        `\n## Deterministische Prüfevidenz\n${checkText}`,
+        `\n## Arbeitsstand\n${stand.text}`,
+      ].join('\n')
+      const result = await runRoleProcess(
+        session,
+        'change-verifier',
+        'sonnet',
+        task,
+        VERDICT_SCHEMA
+      )
+      const verdict = result.struktur as RollenVerdict | null
+      const text = verdict ? verdictAlsText(verdict) : result.text
+      const hasFindings = Boolean(verdict?.befunde.some((finding) => finding.status !== 'behoben'))
+      const checkFailed = checks.some((check) => check.status === 'failed')
+      session.state.verification.status =
+        result.status !== 'done' || !verdict
+          ? 'failed'
+          : hasFindings || checkFailed || verdict.verdict === 'befunde'
+            ? 'findings'
+            : 'passed'
+      session.state.verification.updatedAt = now()
+      setNode(session, 'change-verifier', {
+        status: result.status === 'done' ? 'done' : result.status,
+        phase: session.state.verification.status === 'passed' ? 'bestanden' : 'Befunde',
+        ergebnis: verdict ? verdictKurz(verdict) : text.slice(0, 300),
+        volltext: text,
+        tokensIn: result.tokensIn,
+        tokensOut: result.tokensOut,
+        anfragen: result.anfragen,
+        kostenUsd: result.kostenUsd,
+        befunde: verdict?.befunde ?? null,
+        endedAt: now(),
       })
+      session.state.tokensIn += result.tokensIn
+      session.state.tokensOut += result.tokensOut
+      session.state.anfragen += result.anfragen
+      session.state.kostenUsd += result.kostenUsd
+      session.kostenBasisUsd += result.kostenUsd
+      if (text.trim()) {
+        await writeRoleReport(session, 'change-verifier', text)
+        const answer = { t: now(), text: `## Verifikation\n\n${text}` }
+        session.state.antworten.push(answer)
+        emit(session, 'antwort', answer)
+      }
+      push(session, {
+        agent: 'system',
+        kind: session.state.verification.status === 'passed' ? 'result' : 'error',
+        text:
+          session.state.verification.status === 'passed'
+            ? 'Verifikation bestanden'
+            : 'Verifikation mit Befunden beendet',
+      })
+      return { ok: true }
+    } catch (error) {
+      session.state.verification.status = 'failed'
+      session.state.verification.updatedAt = now()
+      setNode(session, 'change-verifier', {
+        status: 'error',
+        phase: 'Verifikation fehlgeschlagen',
+        endedAt: now(),
+      })
+      push(session, {
+        agent: 'system',
+        kind: 'error',
+        text: `Verifikation fehlgeschlagen: ${String(error).slice(0, 240)}`,
+      })
+      return { ok: false, error: String(error) }
+    } finally {
+      session.pipelineLaeuft = false
+      session.state.pipelineAktiv = false
+      session.state.pipelineRollen = []
+      emit(session, 'state', session.state)
+      await session.persist()
     }
-    session.state.verification.status = 'reviewing'
-    setNode(session, 'change-verifier', { phase: 'unabhängige Modellprüfung' })
-
-    const checkText = checks.length
-      ? checks
-          .map((c) => `- ${c.command}: ${c.status}\n${c.status === 'failed' ? c.output : ''}`)
-          .join('\n')
-      : '- Keine konfigurierten Checks gefunden.'
-    const requirements = session.state.anforderungen
-      .map((entry) => `- [${entry.status}] ${entry.text}`)
-      .join('\n')
-    const task = [
-      'Prüfe den abgeschlossenen Arbeitsstand unabhängig gegen die Anforderungen.',
-      `Risikostufe: ${assessment.risk}. Fokus: ${assessment.focuses.join(', ')}.`,
-      'Melde nur konkrete Befunde ab Schweregrad mittel. Nimm keine Änderungen vor.',
-      `\n## Anforderungen\n${requirements || '- Keine externe Liste vorhanden.'}`,
-      `\n## Deterministische Prüfevidenz\n${checkText}`,
-      `\n## Arbeitsstand\n${stand.text}`,
-    ].join('\n')
-    const result = await runRoleProcess(session, 'change-verifier', 'sonnet', task, VERDICT_SCHEMA)
-    const verdict = result.struktur as RollenVerdict | null
-    const text = verdict ? verdictAlsText(verdict) : result.text
-    const hasFindings = Boolean(verdict?.befunde.some((finding) => finding.status !== 'behoben'))
-    const checkFailed = checks.some((check) => check.status === 'failed')
-    session.state.verification.status =
-      result.status !== 'done' ? 'failed' : hasFindings || checkFailed ? 'findings' : 'passed'
-    session.state.verification.updatedAt = now()
-    setNode(session, 'change-verifier', {
-      status: result.status === 'done' ? 'done' : result.status,
-      phase: session.state.verification.status === 'passed' ? 'bestanden' : 'Befunde',
-      ergebnis: verdict ? verdictKurz(verdict) : text.slice(0, 300),
-      volltext: text,
-      tokensIn: result.tokensIn,
-      tokensOut: result.tokensOut,
-      anfragen: result.anfragen,
-      kostenUsd: result.kostenUsd,
-      befunde: verdict?.befunde ?? null,
-      endedAt: now(),
-    })
-    session.state.tokensIn += result.tokensIn
-    session.state.tokensOut += result.tokensOut
-    session.state.anfragen += result.anfragen
-    session.state.kostenUsd += result.kostenUsd
-    session.kostenBasisUsd += result.kostenUsd
-    if (text.trim()) {
-      await writeRoleReport(session, 'change-verifier', text)
-      const answer = { t: now(), text: `## Verifikation\n\n${text}` }
-      session.state.antworten.push(answer)
-      emit(session, 'antwort', answer)
-    }
-    push(session, {
-      agent: 'system',
-      kind: session.state.verification.status === 'passed' ? 'result' : 'error',
-      text:
-        session.state.verification.status === 'passed'
-          ? 'Verifikation bestanden'
-          : 'Verifikation mit Befunden beendet',
-    })
-    return { ok: true }
-  } catch (error) {
-    session.state.verification.status = 'failed'
-    session.state.verification.updatedAt = now()
-    setNode(session, 'change-verifier', {
-      status: 'error',
-      phase: 'Verifikation fehlgeschlagen',
-      endedAt: now(),
-    })
-    push(session, {
-      agent: 'system',
-      kind: 'error',
-      text: `Verifikation fehlgeschlagen: ${String(error).slice(0, 240)}`,
-    })
-    return { ok: false, error: String(error) }
   } finally {
     session.pipelineLaeuft = false
-    session.state.pipelineAktiv = false
-    session.state.pipelineRollen = []
-    emit(session, 'state', session.state)
-    await session.persist()
   }
 }
