@@ -194,6 +194,8 @@ export async function reconfigureSession(
 ): Promise<{ ok: boolean; error?: string }> {
   const s = registry.get(id)
   if (!s) return { ok: false, error: 'Session unbekannt' }
+  if (s.pipelineLaeuft || s.rundeAktiv || s.wirdUmgestellt)
+    return { ok: false, error: 'Umstellung erst nach Abschluss der laufenden Arbeit möglich' }
   if (!s.state.claudeSessionId)
     return { ok: false, error: 'Session hat noch keine Kennung von Claude' }
 
@@ -245,13 +247,14 @@ export async function reconfigureSession(
 
 export function sendMessage(id: string, text: string): boolean {
   const s = registry.get(id)
-  if (!s?.child?.stdin.writable) return false
+  if (!s?.child?.stdin.writable || s.child.killed || s.pipelineLaeuft) return false
   const msg = {
     type: 'user',
     message: { role: 'user', content: [{ type: 'text', text }] },
   }
   s.child.stdin.write(JSON.stringify(msg) + '\n')
   s.rundeAktiv = true
+  setNode(s, 'orchestrator', { status: 'running', phase: 'arbeitet', endedAt: null })
   push(s, { agent: 'du', kind: 'system', text })
   // Jede Nutzer-Nachricht wird deterministisch zur Anforderung — die
   // Einordnung (verworfen bei „ja bitte") ist Sache des Orchestrators.
@@ -313,9 +316,17 @@ export async function listSessions(): Promise<SessionState[]> {
 export async function resumeSession(
   id: string
 ): Promise<{ ok: boolean; error?: string; state?: SessionState }> {
-  if (registry.has(id)) return { ok: true, state: registry.get(id)!.state }
+  const existing = registry.get(id)
+  if (existing?.pipelineLaeuft) return { ok: false, error: 'Es läuft noch ein Rollenlauf' }
+  if (
+    existing?.child &&
+    !existing.child.killed &&
+    existing.child.exitCode === null &&
+    existing.child.signalCode === null
+  )
+    return { ok: true, state: existing.state }
 
-  const alt = (await sessionStore.loadAll()).find((s) => s.id === id)
+  const alt = existing?.state ?? (await sessionStore.loadAll()).find((s) => s.id === id)
   if (!alt) return { ok: false, error: 'Lauf nicht in der Ablage gefunden' }
   if (!alt.claudeSessionId)
     return {

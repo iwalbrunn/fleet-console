@@ -44,6 +44,7 @@ function SwitchRow({
 /** Linke Spalte: Projekt, Modell, Rollen und die Start-/Stop-Steuerung.
  *  Aller Zustand lebt in der Seite — hier wird nur gerendert und gemeldet. */
 export function SessionSidebar(props: {
+  busy?: boolean
   session: SessionState | null
   prozessLebt: boolean
   wartet: boolean
@@ -280,12 +281,34 @@ export function SessionSidebar(props: {
           <div>
             Workflows: {projectContext.workflows.length} · Checks: {projectContext.checks.length}
           </div>
+          <div style={{ fontSize: 10, color: 'var(--color-neutral-500)' }}>
+            {t('projectContext.scopeNote')}
+          </div>
           {projectContext.warnings.map((warning) => (
             <div key={warning} style={{ color: 'var(--color-warn)' }}>
               ! {warning}
             </div>
           ))}
         </div>
+      )}
+
+      {session?.claudeContext && (
+        <details className="codebox" style={{ fontFamily: 'var(--font-body)', lineHeight: 1.55 }}>
+          <summary style={{ cursor: 'pointer' }}>
+            {t('projectContext.recognized', {
+              skills: session.claudeContext.skills.length,
+              agents: session.claudeContext.agents.length,
+            })}
+          </summary>
+          <div style={{ fontSize: 10, color: 'var(--color-neutral-500)', marginTop: 6 }}>
+            {t('projectContext.recognizedNote')}
+          </div>
+          <ul style={{ paddingLeft: 16, maxHeight: 220, overflowY: 'auto', fontSize: 11 }}>
+            {session.claudeContext.skills.map((skill) => (
+              <li key={skill}>{skill}</li>
+            ))}
+          </ul>
+        </details>
       )}
 
       <details>
@@ -438,7 +461,7 @@ export function SessionSidebar(props: {
         <button
           className="btn btn-primary btn-block"
           onClick={props.onStart}
-          disabled={!prompt.trim() || !project}
+          disabled={props.busy || !prompt.trim() || !project}
         >
           <i className="ph ph-play" />
           {t('session.start')}

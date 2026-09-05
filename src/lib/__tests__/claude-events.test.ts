@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, test } from 'vitest'
-import { handleClaudeEvent } from '../claude-events'
+import { describeTool, handleClaudeEvent } from '../claude-events'
 import { createSessionRuntime, leererKnoten } from '../session-runtime'
 import type { SessionState } from '../types'
 
@@ -60,6 +60,11 @@ describe('Claude-Stream-Ereignisse', () => {
       effects
     )
 
+    expect(runtime.state.claudeContext).toEqual({
+      skills: ['test'],
+      agents: ['senior-developer'],
+      tools: ['Bash', 'Read'],
+    })
     expect(runtime.state.claudeSessionId).toBe('claude-session-123')
     expect(runtime.state.nodes[0].phase).toBe('Kontext geladen')
     expect(runtime.state.log.at(-1)?.text).toContain('2 Tools')
@@ -159,11 +164,67 @@ describe('Claude-Stream-Ereignisse', () => {
     )
 
     expect(runtime.state.kostenUsd).toBe(1.75)
-    expect(runtime.state.nodes[0].phase).toBe('Antwort abgeschlossen')
+    expect(runtime.state.nodes[0].phase).toBe('Wartet auf Eingabe')
     expect(
       runtime.state.log.some((line) =>
         line.text.includes('Review über den Rollenlauf steht noch aus')
       )
     ).toBe(true)
   })
+})
+
+test('surfaces a structured error and marks the round failed, not completed', () => {
+  const runtime = createSessionRuntime(state(), { persist: async () => {} })
+  handleClaudeEvent(
+    runtime,
+    {
+      type: 'result',
+      subtype: 'error_during_execution',
+      is_error: true,
+      errors: ['Authentication failed'],
+    },
+    effects
+  )
+  expect(runtime.state.nodes[0]).toMatchObject({ status: 'error', phase: 'Runde fehlgeschlagen' })
+  expect(
+    runtime.state.log.some(
+      (line) => line.kind === 'error' && line.text.includes('Authentication failed')
+    )
+  ).toBe(true)
+  expect(runtime.rundeAktiv).toBe(false)
+})
+test('uses final model totals and corrects main-agent output placeholders', () => {
+  const runtime = createSessionRuntime(state(), { persist: async () => {} })
+  handleClaudeEvent(
+    runtime,
+    {
+      type: 'assistant',
+      message: { id: 'placeholder', usage: { input_tokens: 10, output_tokens: 1 }, content: [] },
+    },
+    effects
+  )
+  handleClaudeEvent(
+    runtime,
+    {
+      type: 'result',
+      subtype: 'success',
+      usage: { output_tokens: 800 },
+      modelUsage: {
+        opus: {
+          inputTokens: 10,
+          outputTokens: 800,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 40,
+        },
+      },
+    },
+    effects
+  )
+  expect(runtime.state.tokensOut).toBe(800)
+  expect(runtime.state.nodes[0].tokensOut).toBe(800)
+  expect(runtime.state.tokensCacheWrite).toBe(40)
+})
+
+test('names the actual skill invocation in the live feed', () => {
+  expect(describeTool('Skill', { skill: 'humanizer', args: 'Text' })).toBe('Skill(humanizer)')
 })

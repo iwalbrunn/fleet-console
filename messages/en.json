@@ -31,7 +31,10 @@
     "parallelNote": "Ultracode uses native workflows for work that can be split meaningfully."
   },
   "projectContext": {
-    "title": "Claude project context"
+    "title": "Claude project context",
+    "scopeNote": "Counts include files in this project only. The Claude CLI also loads personal and plugin skills.",
+    "recognized": "CLI recognized: {skills} skills/commands · {agents} agents",
+    "recognizedNote": "Reported by Claude at session start. Recognized means available; actual calls appear as Skill(name) in the live feed."
   },
   "session": {
     "start": "Start Session",
@@ -49,19 +52,23 @@
     "worktreeNote": "own working copy (git worktree), cleaned up if unused"
   },
   "stats": {
-    "tokens": "Tokens",
+    "tokens": "Session tokens",
     "out": "out",
     "in": "in",
     "cache": "Cache",
     "requests": "requests",
     "duration": "Duration",
-    "tooltip": "Cache writes (↑) cost extra, cache reads (↓) are cheap and show the context size. Only newly processed tokens are displayed."
+    "tooltip": "Input = fresh tokens + cache writes; cumulative cache reads. Output is provisional during a turn; final CLI totals include reasoning and subagents. Not subscription billing."
   },
   "feed": {
     "title": "Live Feed",
     "waiting": "waiting",
     "noItems": "— nothing yet —",
-    "of": "of"
+    "of": "of",
+    "connecting": "Connecting to live feed …",
+    "connected": "Live connected",
+    "reconnecting": "Connection lost – reconnecting …",
+    "closed": "Saved snapshot"
   },
   "messages": {
     "placeholderWartet": "Reply and continue...",
@@ -225,5 +232,26 @@
     "button": "Handover → new session",
     "title": "Starts a fresh session with a full context reset — open requirements carry over.",
     "promptIntro": "Continuation of an earlier session with fresh context (handover). First get up to speed: recent git log, git status, then the requirements list. Open requirements from the handover:"
+  },
+  "quota": {
+    "title": "Claude subscription · allowance",
+    "allowed": "Usage available",
+    "allowed_warning": "Approaching limit",
+    "rejected": "Limit reached",
+    "five_hour": "5 hours",
+    "seven_day": "7 days",
+    "seven_day_opus": "7 days · Opus",
+    "seven_day_sonnet": "7 days · Sonnet",
+    "overage": "Extra usage",
+    "remaining": "{value}% remaining",
+    "unknown": "Unavailable",
+    "reset": "Resets: {time}",
+    "expired": "Reset time passed ({time}) – awaiting update",
+    "updated": "Reported by Claude: {time}",
+    "stale": "Last known snapshot",
+    "noData": "No limit data received from Claude yet.",
+    "note": "Shared Claude allowance. Updated from CLI limit events; tokens are not remaining allowance.",
+    "open": "Open current usage in Claude",
+    "overageActive": "Claude reports paid extra usage."
   }
 }

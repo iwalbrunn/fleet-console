@@ -98,11 +98,24 @@ orchestrator.
 
 Ordered by how much damage they did.
 
-### Do not sum cache tokens
+### Distinguish token work, context size and subscription allowance
 
-`cache_read_input_tokens` reports the same context again on **every** request.
-Summed up, a one-liner ended up showing 56,734 input tokens. The correct way:
-sum fresh input, and show cache reads as a maximum next to it.
+Count a message only once even when the CLI sends multiple content blocks with
+identical usage. Per-message output can be provisional: `result.modelUsage`
+provides cumulative per-process totals including nested subagents. Reconcile
+those totals against the process contribution, preserving previous processes and
+independent role runs. `result.usage` covers the current main-agent turn only.
+
+Cache reads represent repeated processing work, not unique context size. They
+are accumulated once per message and kept separate from fresh input and cache
+writes. The old maximum-cache interpretation was not a consumption total.
+Neither these token counts nor a local dollar estimate reveal subscription
+allowance. `quota.ts` consumes CLI limit events, validates optional utilization,
+and persists only non-secret status, window, percentage and timestamp fields.
+The UI shows missing/expired data explicitly and labels older observations.
+
+Sources: [Claude usage accounting](https://code.claude.com/docs/en/agent-sdk/cost-tracking)
+and [rate-limit events](https://code.claude.com/docs/en/agent-sdk/python#ratelimitinfo).
 
 ### The security stop hook fires inside role sessions too
 
@@ -260,7 +273,8 @@ fleet/<short>` under `~/.fleet-console/worktrees/` — deliberately outside
   theirs for `--resume`.
 - **Costs.** `total_cost_usd` from every `result` event (per process,
   cumulative — role runs and restarts are folded in via a base amount). Not a
-  bill on a subscription, but the honest per-run consumption number.
+  bill on a subscription. Retained for backward-compatible storage only; the UI
+  presents CLI-reported subscription allowance instead.
 
 **Context parity.** Headless `-p` sessions load CLAUDE.md, skills and
 settings like interactive ones (this console deliberately does not use
@@ -314,3 +328,19 @@ Also deliberately absent:
   it does not duplicate the workflow scheduler. Independent final verification
   remains Fleet-owned because it combines server-owned requirements, local
   checks and a fresh read-only process.
+
+## Reliability guarantees added in September 2026
+
+- SSE abort and cancellation release both subscriptions and heartbeat timers.
+  The browser retries transport failures and replaces its state from the server
+  snapshot. Live subscriptions remain open for independent role results after
+  the main process exits; persisted-only sessions close after a snapshot.
+- Every process handler checks ownership before touching the session. Buffered
+  final output is flushed; stderr is diagnostic until a structured failure or
+  exit status says otherwise. SIGKILL checks exit/signal state, not `killed`.
+- Child CLI and npm processes do not inherit Next's NODE_ENV/NEXT_RUNTIME.
+- Snapshot writes are serialized per session and committed with atomic rename.
+- Review preparation acquires its lock before filesystem awaits; missing
+  structured output cannot pass verification.
+- History reads at most four transcripts concurrently and removes stale cache
+  entries instead of reading every transcript into memory simultaneously.

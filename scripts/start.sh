@@ -13,6 +13,9 @@
 
 set -uo pipefail
 
+# Der Starter kann selbst aus einer Production-Session kommen.
+unset NODE_ENV NEXT_RUNTIME
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT=4300
 URL="http://localhost:$PORT"
@@ -68,7 +71,7 @@ fi
 
 # Neu bauen, wenn Quellen jünger sind als der letzte Build. Ohne das startet
 # nach einer Codeänderung stillschweigend der alte Stand.
-neuester_quellstand=$(find src package.json next.config.ts -type f -newer .next/BUILD_ID 2>/dev/null | head -1)
+neuester_quellstand=$(find src messages package.json package-lock.json next.config.ts tsconfig.json -type f -newer .next/BUILD_ID 2>/dev/null | head -1)
 if [ ! -f .next/BUILD_ID ] || [ -n "$neuester_quellstand" ]; then
   melde "·" "Baue die aktuelle Fassung …"
   if ! npm run build >>"$LOG" 2>&1; then

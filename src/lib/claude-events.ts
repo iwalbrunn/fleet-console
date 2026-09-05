@@ -1,3 +1,5 @@
+import { captureQuota } from './quota'
+import { reconcileUsage } from './usage'
 import { HOME } from './config'
 import { requirementStore } from './session-requirements'
 import {
@@ -42,15 +44,14 @@ export interface ClaudeEventEffects {
 
 const defaultEffects: ClaudeEventEffects = {
   updateRequirements: (session) =>
-    anforderungenAendern(session, (aktuell) =>
-      requirementStore.merge(session.state.id, aktuell)
-    ),
+    anforderungenAendern(session, (aktuell) => requirementStore.merge(session.state.id, aktuell)),
   writeRoleReport,
 }
 
 export function describeTool(name: string, value: unknown): string {
   const input = record(value)
   if (!input) return name
+  if (name === 'Skill') return `Skill(${String(input.skill ?? '').slice(0, 120)})`
   if (name === 'Bash') return `Bash(${String(input.command ?? '').slice(0, 70)})`
   const file = input.file_path ?? input.path ?? input.pattern ?? input.notebook_path
   if (file) return `${name} ${String(file).replace(process.env.HOME ?? '', '~')}`
@@ -69,11 +70,25 @@ export function handleClaudeEvent(
   const effects = { ...defaultEffects, ...effectOverrides }
   const state = session.state
 
+  if (event.type === 'rate_limit_event') {
+    captureQuota(event.rate_limit_info)
+    return
+  }
+
   if (event.type === 'system') {
     if (typeof event.session_id === 'string' && event.session_id) {
       state.claudeSessionId = event.session_id
     }
     if (event.subtype === 'init') {
+      const names = (value: unknown): string[] =>
+        Array.isArray(value)
+          ? [...new Set(value.filter((item): item is string => typeof item === 'string'))].sort()
+          : []
+      state.claudeContext = {
+        skills: names(event.slash_commands),
+        agents: names(event.agents),
+        tools: names(event.tools),
+      }
       setNode(session, 'orchestrator', { phase: 'Kontext geladen' })
       const parts = [
         `Session ${String(event.session_id ?? '').slice(0, 8)}`,
@@ -87,6 +102,7 @@ export function handleClaudeEvent(
         event.cwd ? `cwd ${String(event.cwd).replace(HOME, '~')}` : null,
       ].filter(Boolean)
       push(session, { agent: 'orchestrator', kind: 'system', text: parts.join(' · ') })
+      emit(session, 'state', state)
     }
     return
   }
@@ -102,7 +118,12 @@ export function handleClaudeEvent(
       if (delta.neueNachricht) state.anfragen += 1
       state.tokensIn += delta.in
       state.tokensCacheWrite += delta.cacheWrite
-      state.tokensCached = Math.max(state.tokensCached, usage.cache_read_input_tokens ?? 0)
+      state.tokensCached += delta.cacheRead
+      session.processUsage.in += delta.in
+      session.processUsage.out += delta.out
+      session.processUsage.cacheRead += delta.cacheRead
+      session.processUsage.cacheWrite += delta.cacheWrite
+      if (!event.parent_tool_use_id) session.roundOutput += delta.out
       state.tokensOut += delta.out
       if (delta.neueNachricht || delta.in || delta.out) {
         const target = role ?? 'orchestrator'
@@ -238,6 +259,26 @@ export function handleClaudeEvent(
 
   if (event.type === 'result') {
     session.rundeAktiv = false
+    reconcileUsage(state, session.processUsage, event.modelUsage)
+    const resultUsage = streamUsage(event.usage)
+    if (typeof resultUsage?.output_tokens === 'number') {
+      const main = node(session, 'orchestrator')
+      setNode(session, 'orchestrator', {
+        tokensOut: main.tokensOut + resultUsage.output_tokens - session.roundOutput,
+      })
+    }
+    session.roundOutput = 0
+    emit(session, 'tokens', {
+      in: state.tokensIn,
+      out: state.tokensOut,
+      cached: state.tokensCached,
+      cacheWrite: state.tokensCacheWrite,
+      anfragen: state.anfragen,
+      kosten: state.kostenUsd,
+    })
+    const failed =
+      event.is_error === true ||
+      (typeof event.subtype === 'string' && event.subtype.startsWith('error'))
     if (typeof event.total_cost_usd === 'number') {
       state.kostenUsd = session.kostenBasisUsd + event.total_cost_usd
       emit(session, 'tokens', {
@@ -252,9 +293,17 @@ export function handleClaudeEvent(
     const duration = typeof event.duration_ms === 'number' ? event.duration_ms : 0
     push(session, {
       agent: 'system',
-      kind: 'result',
+      kind: failed ? 'error' : 'result',
       text: `Ergebnis: ${String(event.subtype ?? 'ok')}${duration ? ` · ${Math.round(duration / 1000)}s` : ''}`,
     })
+    if (failed) {
+      const details = Array.isArray(event.errors)
+        ? event.errors.filter((e): e is string => typeof e === 'string').join(' · ')
+        : typeof event.result === 'string'
+          ? event.result
+          : ''
+      if (details) push(session, { agent: 'system', kind: 'error', text: details.slice(0, 2000) })
+    }
     const pending = new Set(session.pendingAgents.values())
     for (const graphNode of state.nodes) {
       if (graphNode.id === 'orchestrator' || graphNode.status !== 'running') continue
@@ -263,15 +312,24 @@ export function handleClaudeEvent(
         setNode(session, graphNode.id, { phase: 'im Hintergrund — kein Ergebnis in dieser Runde' })
         push(session, {
           agent: graphNode.id,
-          kind: 'error',
+          kind: 'system',
           text: 'Runde endete ohne Rückmeldung dieser Rolle',
         })
         continue
       }
       setNode(session, graphNode.id, { status: 'done', phase: 'zurückgemeldet', endedAt: now() })
     }
-    setNode(session, 'orchestrator', { phase: 'Antwort abgeschlossen' })
-    const requirementsUpdated = Promise.resolve(effects.updateRequirements(session))
+    setNode(session, 'orchestrator', {
+      status: failed ? 'error' : 'idle',
+      phase: failed ? 'Runde fehlgeschlagen' : 'Wartet auf Eingabe',
+    })
+    const requirementsUpdated = Promise.resolve(effects.updateRequirements(session)).catch(() => {
+      push(session, {
+        agent: 'system',
+        kind: 'error',
+        text: 'Anforderungsstatus konnte nicht aktualisiert werden.',
+      })
+    })
     const delegated = state.nodes.some(
       (graphNode) => graphNode.id !== 'orchestrator' && graphNode.calls > 0
     )
@@ -283,15 +341,19 @@ export function handleClaudeEvent(
       })
     }
     emit(session, 'state', state)
-    if (!state.pipelineAktiv) {
-      void requirementsUpdated.finally(() => {
-        setTimeout(() => {
-          void import('./verification').then(async ({ recommendVerification, runVerification }) => {
-            if (state.mode === 'verified') await runVerification(state.id)
-            else await recommendVerification(state.id)
-          })
-        }, 250).unref?.()
-      })
+    if (!state.pipelineAktiv && !failed) {
+      void requirementsUpdated
+        .catch(() => {})
+        .then(() => {
+          setTimeout(() => {
+            void import('./verification')
+              .then(async ({ recommendVerification, runVerification }) => {
+                if (state.mode === 'verified') await runVerification(state.id)
+                else await recommendVerification(state.id)
+              })
+              .catch(() => {})
+          }, 250).unref?.()
+        })
     }
   }
 }

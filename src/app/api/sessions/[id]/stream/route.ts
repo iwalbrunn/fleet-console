@@ -1,40 +1,60 @@
-import { subscribe } from '@/lib/sessions'
+import { getSession, listSessions, subscribe } from '@/lib/sessions'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const state = getSession(id) ?? (await listSessions()).find((entry) => entry.id === id)
+  if (!state) return new Response(null, { status: 204 }) // EventSource soll nicht endlos neu verbinden.
   const encoder = new TextEncoder()
   let unsubscribe: (() => void) | null = null
-
-  const stream = new ReadableStream({
+  let beat: ReturnType<typeof setInterval> | null = null
+  let closed = false
+  let abort: () => void = () => {}
+  const cleanup = () => {
+    if (closed) return
+    closed = true
+    unsubscribe?.()
+    if (beat) clearInterval(beat)
+    req.signal.removeEventListener('abort', abort)
+  }
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const send = (chunk: string) => {
+        if (closed) return
         try {
           controller.enqueue(encoder.encode(chunk))
         } catch {
-          /* Verbindung geschlossen */
+          cleanup()
         }
+      }
+      abort = () => {
+        cleanup()
+        try {
+          controller.close()
+        } catch {
+          /* bereits geschlossen */
+        }
+      }
+      req.signal.addEventListener('abort', abort, { once: true })
+      if (req.signal.aborted) {
+        abort()
+        return
       }
       unsubscribe = subscribe(id, send)
       if (!unsubscribe) {
-        send(`event: error\ndata: ${JSON.stringify({ error: 'Session unbekannt' })}\n\n`)
-        controller.close()
+        send(`event: state\ndata: ${JSON.stringify(state)}\n\n`)
+        send('event: archived\ndata: {}\n\n')
+        abort()
         return
       }
-      // Heartbeat, damit Proxys/Browser die Verbindung offen halten
-      const beat = setInterval(() => send(': ping\n\n'), 20000)
-      ;(controller as any)._beat = beat
+      beat = setInterval(() => send(': ping\n\n'), 20000)
     },
-    cancel(reason) {
-      unsubscribe?.()
-      const beat = (this as any)?._beat
-      if (beat) clearInterval(beat)
-      void reason
+    cancel() {
+      cleanup()
     },
   })
-
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream; charset=utf-8',

@@ -77,7 +77,7 @@ export function Topbar(props: {
                 : 'none',
             }}
           />
-          {sessions.length > 1 ? (
+          {sessions.length > 0 ? (
             <select
               value={session?.id ?? ''}
               onChange={(e) => {
@@ -92,6 +92,9 @@ export function Topbar(props: {
                 cursor: 'pointer',
               }}
             >
+              <option value="" disabled>
+                {t('topbar.noSession')}
+              </option>
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>
                   {statusLabel[s.status]} · {s.prompt.slice(0, 28)}

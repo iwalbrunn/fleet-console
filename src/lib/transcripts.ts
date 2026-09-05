@@ -1,3 +1,4 @@
+import { neuerUsageZaehler, usageDelta } from './usage'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { PROJECTS_DIR, shortProjectName } from './config'
@@ -82,7 +83,8 @@ function toolUses(lines: Line[]) {
     const content = l.message?.content
     if (!Array.isArray(content)) continue
     for (const b of content) {
-      if (b?.type === 'tool_use' && typeof b.name === 'string') uses.push({ name: b.name, input: b.input ?? {} })
+      if (b?.type === 'tool_use' && typeof b.name === 'string')
+        uses.push({ name: b.name, input: b.input ?? {} })
     }
   }
   return uses
@@ -125,14 +127,16 @@ function summarize(file: string, lines: Line[]): RunSummary | null {
   let tokensIn = 0
   let tokensOut = 0
   let tokensCached = 0
+  const counter = neuerUsageZaehler()
   for (const l of lines) {
     const u = l.message?.usage
     if (!u) continue
     // cache_read wiederholt bei jeder Anfrage denselben Kontext — aufsummiert
     // ergäbe das ein Vielfaches dessen, was tatsächlich verarbeitet wurde.
-    tokensIn += (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
-    tokensCached = Math.max(tokensCached, u.cache_read_input_tokens ?? 0)
-    tokensOut += u.output_tokens ?? 0
+    const delta = usageDelta(counter, l.message?.id, u)
+    tokensIn += delta.in + delta.cacheWrite
+    tokensCached += delta.cacheRead
+    tokensOut += delta.out
   }
 
   const uses = toolUses(lines)
@@ -140,7 +144,7 @@ function summarize(file: string, lines: Line[]): RunSummary | null {
   const securityChecked = uses.some(
     (u) =>
       (u.name === 'Agent' || u.name === 'Task') &&
-      String(u.input?.subagent_type ?? u.input?.description ?? '').includes('security'),
+      String(u.input?.subagent_type ?? u.input?.description ?? '').includes('security')
   )
 
   return {
@@ -169,31 +173,37 @@ export async function listRuns(limit = 200): Promise<RunSummary[]> {
   const files = await listTranscriptFiles()
   const runs: RunSummary[] = []
 
+  const present = new Set(files)
+  for (const key of cache.keys()) if (!present.has(key)) cache.delete(key)
+  let cursor = 0
+  const read = async (file: string) => {
+    let stat
+    try {
+      stat = await fs.stat(file)
+    } catch {
+      return
+    }
+    const hit = cache.get(file)
+    if (hit && hit.mtimeMs === stat.mtimeMs) {
+      if (hit.run) runs.push(hit.run)
+      return
+    }
+    // Sehr große Transcripts nur teilweise lesen wäre falsch (Tokens/Dauer
+    // stünden dann daneben) — sie sind selten, also ganz lesen.
+    let raw: string
+    try {
+      raw = await fs.readFile(file, 'utf8')
+    } catch {
+      return
+    }
+    const run = summarize(file, parseLines(raw))
+    cache.set(file, { mtimeMs: stat.mtimeMs, run })
+    if (run) runs.push(run)
+  }
   await Promise.all(
-    files.map(async (file) => {
-      let stat
-      try {
-        stat = await fs.stat(file)
-      } catch {
-        return
-      }
-      const hit = cache.get(file)
-      if (hit && hit.mtimeMs === stat.mtimeMs) {
-        if (hit.run) runs.push(hit.run)
-        return
-      }
-      // Sehr große Transcripts nur teilweise lesen wäre falsch (Tokens/Dauer
-      // stünden dann daneben) — sie sind selten, also ganz lesen.
-      let raw: string
-      try {
-        raw = await fs.readFile(file, 'utf8')
-      } catch {
-        return
-      }
-      const run = summarize(file, parseLines(raw))
-      cache.set(file, { mtimeMs: stat.mtimeMs, run })
-      if (run) runs.push(run)
-    }),
+    Array.from({ length: Math.min(4, files.length) }, async () => {
+      while (cursor < files.length) await read(files[cursor++])
+    })
   )
 
   runs.sort((a, b) => b.started.localeCompare(a.started))
@@ -218,8 +228,8 @@ export async function getRun(id: string): Promise<RunDetail | null> {
       uses
         .filter((u) => u.name === 'Write' || u.name === 'Edit' || u.name === 'NotebookEdit')
         .map((u) => String(u.input?.file_path ?? ''))
-        .filter(Boolean),
-    ),
+        .filter(Boolean)
+    )
   ).slice(0, 40)
 
   const toolCounts = new Map<string, number>()
@@ -238,7 +248,11 @@ export async function getRun(id: string): Promise<RunDetail | null> {
     if (lines[i].type !== 'assistant') continue
     const t = textOf(lines[i].message?.content).trim()
     if (!t) continue
-    for (const para of t.split('\n').map((s) => s.trim()).filter(Boolean).reverse()) {
+    for (const para of t
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .reverse()) {
       if (summary.length >= 4) break
       if (para.length < 12) continue
       summary.unshift(para.replace(/^[-*#>\s]+/, '').slice(0, 220))
@@ -266,6 +280,8 @@ export async function getRun(id: string): Promise<RunDetail | null> {
     artifacts,
     findings,
     agents: [...agentCounts].map(([name, calls]) => ({ name, calls })),
-    tools: [...toolCounts].map(([name, calls]) => ({ name, calls })).sort((a, b) => b.calls - a.calls),
+    tools: [...toolCounts]
+      .map(([name, calls]) => ({ name, calls }))
+      .sort((a, b) => b.calls - a.calls),
   }
 }

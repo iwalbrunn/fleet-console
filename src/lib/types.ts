@@ -84,6 +84,7 @@ export interface FeedLine {
 export interface SessionState {
   id: string
   claudeSessionId: string | null
+  claudeContext?: { skills: string[]; agents: string[]; tools: string[] }
   project: string
   model: string
   mode?: ExecutionMode
