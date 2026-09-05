@@ -31,3 +31,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Design
+
+Maschinenlesbares Designsystem in `DESIGN.md` (Google-DESIGN.md-Format), Prosa-Leitfaden in `DESIGNSYSTEM.md`, Token-Quelle `src/app/nocturne.css`. Vor UI-Arbeit beide lesen; Light- und Dark-Block in nocturne.css identisch halten. Lint: `npx @google/design.md lint DESIGN.md`. Arbeitsweise: Skill `design-system`.
