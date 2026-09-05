@@ -88,6 +88,16 @@ frontmatter lists are understood.
 
 The sidebar warns when a project has no `CLAUDE.md` or no recognized checks.
 
+### Skill visibility
+
+Fleet starts the normal Claude CLI in the selected working directory, so the
+personal, project and plugin configuration is preserved. The project card counts
+only project-local files. A separate expandable list shows the skills, commands
+and agents that the CLI reports during session initialization. This is
+availability, not proof of execution: actual Skill tool calls appear as
+`Skill(name)` in the live feed, and Claude loads a skill's full instructions
+only when it is invoked.
+
 ## Core capabilities
 
 ### Durable requirements
@@ -132,22 +142,29 @@ verifier. Specialists stay folded away until a change actually calls for them:
 
 ![Verification card with the optional specialist run unfolded](docs/screenshots/verifikation.webp)
 
-Subscription percentages come from the local CLI's `rate_limit_event` messages,
-including `unifiedWindows` when available. Fleet reads no OAuth credentials and
-makes no separate usage API calls. The card shows the last observation time;
-missing or expired values remain unavailable rather than being estimated from
-tokens. Open Claude's usage page from the card to check activity from other clients.
-The old dollar estimate is no longer displayed as subscription spending.
+### Subscription allowance and token accounting
 
-Session output totals are reconciled with the CLI's final `modelUsage`, including
-reasoning and nested subagents. Counts during a turn are provisional. Input means
-fresh tokens plus cache writes; cache reads are tracked separately and accumulated
-once per message. Historical runs are deduplicated by message ID.
+The allowance card shows the 5-hour and weekly windows of the Claude
+subscription with reset times and the time of the last observation. The
+percentages come from the local CLI's `rate_limit_event` messages, including
+`unifiedWindows` when available. Fleet reads no OAuth credentials and makes no
+separate usage API calls. Missing or expired values stay marked as unavailable
+instead of being estimated from tokens; the card links to Claude's usage page for
+activity from other clients. The earlier dollar estimate is no longer presented
+as subscription spending.
 
-Temporary network failures reconnect automatically. Failed message submissions
-retain the draft and display the server error; archived sessions show a saved
-snapshot. Diagnostic stderr output remains visible without being labeled a failure;
-structured errors and nonzero process exits are shown explicitly.
+Session totals are reconciled with the CLI's final `modelUsage`, including
+reasoning and nested subagents, so counts during a turn are provisional. Input
+means fresh tokens plus cache writes; cache reads are tracked separately and
+accumulated once per message. Historical runs are deduplicated by message ID.
+
+### Resilient live stream
+
+Temporary network failures reconnect automatically and replace the client state
+from the server snapshot. Failed message submissions keep the draft and show the
+server error. Archived sessions display a saved snapshot. Diagnostic stderr
+output stays visible without being labeled a failure; structured errors and
+nonzero process exits are reported explicitly.
 
 ### Worktree isolation
 
@@ -262,6 +279,7 @@ verification rules and required checks.
 | `src/lib/review-pipeline.ts`      | Optional specialist process pipeline        |
 | `src/lib/session-requirements.ts` | Server-owned requirements                   |
 | `src/lib/session-storage.ts`      | Persistent run state                        |
+| `src/lib/quota.ts`                | CLI-reported subscription allowance         |
 | `src/lib/session-worktrees.ts`    | Git worktree isolation                      |
 
 More implementation detail and known traps are documented in
@@ -290,12 +308,3 @@ direct model API integration, external database or replacement agent framework.
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
-
-### Skill visibility
-
-Fleet starts the normal Claude CLI in the selected working directory, preserving
-its personal, project and plugin configuration. The project card counts only
-project-local files. A separate expandable list shows the skills/commands and
-agent counts reported by the CLI's session initialization. This is availability,
-not proof of execution: actual Skill tool calls include the skill name in the
-live feed. Claude loads a skill's full instructions when invoked.
