@@ -51,6 +51,7 @@ const defaultEffects: ClaudeEventEffects = {
 export function describeTool(name: string, value: unknown): string {
   const input = record(value)
   if (!input) return name
+  if (name === 'Skill') return `Skill(${String(input.skill ?? '').slice(0, 120)})`
   if (name === 'Bash') return `Bash(${String(input.command ?? '').slice(0, 70)})`
   const file = input.file_path ?? input.path ?? input.pattern ?? input.notebook_path
   if (file) return `${name} ${String(file).replace(process.env.HOME ?? '', '~')}`
@@ -79,6 +80,15 @@ export function handleClaudeEvent(
       state.claudeSessionId = event.session_id
     }
     if (event.subtype === 'init') {
+      const names = (value: unknown): string[] =>
+        Array.isArray(value)
+          ? [...new Set(value.filter((item): item is string => typeof item === 'string'))].sort()
+          : []
+      state.claudeContext = {
+        skills: names(event.slash_commands),
+        agents: names(event.agents),
+        tools: names(event.tools),
+      }
       setNode(session, 'orchestrator', { phase: 'Kontext geladen' })
       const parts = [
         `Session ${String(event.session_id ?? '').slice(0, 8)}`,
@@ -92,6 +102,7 @@ export function handleClaudeEvent(
         event.cwd ? `cwd ${String(event.cwd).replace(HOME, '~')}` : null,
       ].filter(Boolean)
       push(session, { agent: 'orchestrator', kind: 'system', text: parts.join(' · ') })
+      emit(session, 'state', state)
     }
     return
   }

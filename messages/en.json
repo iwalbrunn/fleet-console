@@ -31,7 +31,10 @@
     "parallelNote": "Ultracode uses native workflows for work that can be split meaningfully."
   },
   "projectContext": {
-    "title": "Claude project context"
+    "title": "Claude project context",
+    "scopeNote": "Counts include files in this project only. The Claude CLI also loads personal and plugin skills.",
+    "recognized": "CLI recognized: {skills} skills/commands · {agents} agents",
+    "recognizedNote": "Reported by Claude at session start. Recognized means available; actual calls appear as Skill(name) in the live feed."
   },
   "session": {
     "start": "Start Session",

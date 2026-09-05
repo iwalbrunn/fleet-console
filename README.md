@@ -290,3 +290,12 @@ direct model API integration, external database or replacement agent framework.
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
+
+### Skill visibility
+
+Fleet starts the normal Claude CLI in the selected working directory, preserving
+its personal, project and plugin configuration. The project card counts only
+project-local files. A separate expandable list shows the skills/commands and
+agent counts reported by the CLI's session initialization. This is availability,
+not proof of execution: actual Skill tool calls include the skill name in the
+live feed. Claude loads a skill's full instructions when invoked.

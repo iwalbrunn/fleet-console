@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, test } from 'vitest'
-import { handleClaudeEvent } from '../claude-events'
+import { describeTool, handleClaudeEvent } from '../claude-events'
 import { createSessionRuntime, leererKnoten } from '../session-runtime'
 import type { SessionState } from '../types'
 
@@ -60,6 +60,11 @@ describe('Claude-Stream-Ereignisse', () => {
       effects
     )
 
+    expect(runtime.state.claudeContext).toEqual({
+      skills: ['test'],
+      agents: ['senior-developer'],
+      tools: ['Bash', 'Read'],
+    })
     expect(runtime.state.claudeSessionId).toBe('claude-session-123')
     expect(runtime.state.nodes[0].phase).toBe('Kontext geladen')
     expect(runtime.state.log.at(-1)?.text).toContain('2 Tools')
@@ -218,4 +223,8 @@ test('uses final model totals and corrects main-agent output placeholders', () =
   expect(runtime.state.tokensOut).toBe(800)
   expect(runtime.state.nodes[0].tokensOut).toBe(800)
   expect(runtime.state.tokensCacheWrite).toBe(40)
+})
+
+test('names the actual skill invocation in the live feed', () => {
+  expect(describeTool('Skill', { skill: 'humanizer', args: 'Text' })).toBe('Skill(humanizer)')
 })
