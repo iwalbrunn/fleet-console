@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import fs from 'node:fs/promises'
+import path from 'node:path'
+import { isWithinProjectRoots } from '@/lib/config'
 import { rejectCrossOrigin } from '@/lib/http'
 import { listSessions, startSession } from '@/lib/sessions'
 import type { EffortLevel, ExecutionMode } from '@/lib/types'
@@ -46,6 +48,13 @@ export async function POST(req: Request) {
   const uebergabeVon = uebergabeRoh
 
   if (!prompt) return NextResponse.json({ error: 'Prompt fehlt' }, { status: 400 })
+  // Der Pfad wird cwd eines Claude-Prozesses: nur konfigurierte Wurzeln.
+  if (!project || !path.isAbsolute(project) || !isWithinProjectRoots(project)) {
+    return NextResponse.json(
+      { error: 'Projektordner liegt außerhalb der konfigurierten Projektwurzeln' },
+      { status: 400 }
+    )
+  }
   try {
     const stat = await fs.stat(project)
     if (!stat.isDirectory()) throw new Error('kein Verzeichnis')

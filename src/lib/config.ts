@@ -26,6 +26,16 @@ export const PROJECT_ROOTS = (process.env.FLEET_PROJECT_ROOTS ?? path.join(HOME,
   .map((p) => p.replace(/^~/, HOME))
   .filter(Boolean)
 
+/** Liegt ein (bereits normalisierter, absoluter) Pfad in einer der Wurzeln?
+ *  Wird zum cwd einer (ggf. permissiven) Session — deshalb nie einem Pfad aus
+ *  Request oder Ablage glauben, sondern hier prüfen. */
+export function isWithinProjectRoots(dir: string): boolean {
+  const resolved = path.resolve(dir)
+  return PROJECT_ROOTS.some(
+    (root) => resolved === path.resolve(root) || resolved.startsWith(path.resolve(root) + path.sep)
+  )
+}
+
 /** Der Pfad zur Claude-CLI (falls sie nicht im PATH des Servers liegt). */
 export const CLAUDE_BIN = process.env.FLEET_CLAUDE_BIN ?? 'claude'
 

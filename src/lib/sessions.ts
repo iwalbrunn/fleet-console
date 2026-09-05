@@ -18,7 +18,7 @@ import {
 import { sessionStore } from './session-storage'
 import { worktreeManager } from './session-worktrees'
 import type { EffortLevel, ExecutionMode, SessionState } from './types'
-import { PROJECT_ROOTS, WORKTREES_DIR } from './config'
+import { isWithinProjectRoots, WORKTREES_DIR } from './config'
 
 export type {
   Anforderung,
@@ -336,9 +336,7 @@ export async function resumeSession(
   // Die Ablage ist eine Datei, in die theoretisch auch eine (permissive)
   // Session schreiben konnte — Pfade daraus werden deshalb nicht geglaubt,
   // sondern gegen die konfigurierten Wurzeln geprüft, bevor sie cwd werden.
-  const projektErlaubt = PROJECT_ROOTS.some(
-    (wurzel) => alt.project === wurzel || alt.project.startsWith(wurzel + path.sep)
-  )
+  const projektErlaubt = isWithinProjectRoots(alt.project)
   const worktreeErlaubt = !alt.worktreePath || alt.worktreePath.startsWith(WORKTREES_DIR + path.sep)
   if (!projektErlaubt || !worktreeErlaubt) {
     return {
